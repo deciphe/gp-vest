@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.0.0
+// @version      1.0.1
 // @description  Your Vest affiliate earnings, unlock dates and payouts on one clean page. Data stays in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -219,8 +219,6 @@ document.addEventListener('gp-update', () => { if (HOST.isConnected) render(); }
   const clickText = t => { const b = [...document.querySelectorAll('button,[role=tab]')].find(x => x.textContent.trim() === t); if (b) b.click(); return !!b; };
   function gpButton() {
     let host = document.getElementById('gp-btn');
-    const show = /^\/(affiliates|portfolio)/.test(location.pathname);
-    if (!show) { if (host) host.remove(); return; }
     if (host || !document.body) return;
     fonts();
     host = document.createElement('div'); host.id = 'gp-btn';
@@ -235,10 +233,10 @@ document.addEventListener('gp-update', () => { if (HOST.isConnected) render(); }
     </style><button id="b"><b>GP<i>.</i></b><span id="t">Dashboard</span></button>`;
     root.getElementById('b').onclick = async () => {
       const t = root.getElementById('t'); t.textContent = 'Loading…';
-      const aff = location.pathname.startsWith('/affiliates');
-      clickText(aff ? '1Y' : 'Payouts'); await sleep(3000);
+      const path = location.pathname, aff = path.startsWith('/affiliates'), pay = path.startsWith('/portfolio');
+      if (aff || pay) { clickText(aff ? '1Y' : 'Payouts'); await sleep(3000); }
       t.textContent = 'Dashboard';
-      openDash(aff ? 'aff' : 'pay');
+      openDash(pay ? 'pay' : 'aff');
     };
     document.body.appendChild(host);
   }
