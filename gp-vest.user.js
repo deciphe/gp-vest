@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.3.0
+// @version      1.3.1
 // @description  Your Vest affiliate earnings, unlock dates and payouts on one clean page. Data stays in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -373,21 +373,47 @@ load().then(S => setTheme(S.theme || 'cream'));
     if (host || !document.body) return;
     fonts();
     host = document.createElement('div'); host.id = 'gp-btn';
-    host.style.cssText = 'position:fixed;right:20px;bottom:56px;z-index:2147483646';
+    const pos = GM_getValue('btnPos', null) || { side: 'right', y: 0.5 };
+    const place = () => { host.style.cssText = `position:fixed;z-index:2147483646;top:${Math.round(pos.y * 100)}%;transform:translateY(-50%);${pos.side}:10px`; host.dataset.side = pos.side; };
+    place();
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML = `<style>
-      button{display:flex;align-items:center;gap:10px;font:800 13px "Manrope",system-ui,sans-serif;letter-spacing:-.01em;padding:7px 8px 7px 16px;border-radius:99px;cursor:pointer;color:#f7f6f2;
-        background:linear-gradient(150deg,rgba(239,226,189,.16),rgba(239,226,189,.03)),rgba(20,20,19,.88);border:1px solid rgba(239,226,189,.3);backdrop-filter:blur(14px);box-shadow:0 18px 40px -14px rgba(0,0,0,.8)}
-      button:hover{border-color:rgba(239,226,189,.6)}
+      button{display:flex;align-items:center;gap:0;height:38px;padding:0 0 0 0;border-radius:99px;cursor:grab;color:#f7f6f2;touch-action:none;user-select:none;
+        font:800 12.5px "Manrope",system-ui,sans-serif;letter-spacing:-.01em;
+        background:linear-gradient(150deg,rgba(239,226,189,.16),rgba(239,226,189,.03)),rgba(20,20,19,.9);border:1px solid rgba(239,226,189,.3);backdrop-filter:blur(14px);box-shadow:0 14px 34px -12px rgba(0,0,0,.85);
+        transition:border-color .2s,box-shadow .2s;opacity:.82}
+      :host([data-side=left]) button{flex-direction:row-reverse}
+      button:hover,button.busy{opacity:1;border-color:rgba(239,226,189,.6)}
+      button.drag{cursor:grabbing;opacity:1;box-shadow:0 20px 44px -10px rgba(0,0,0,.9)}
+      b{width:36px;text-align:center;flex:none}
       i{font-style:normal;color:#efe2bd}
-      span{padding:7px 13px;border-radius:99px;background:linear-gradient(180deg,#f6ecd0,#d9c48c);color:#141413}
-    </style><button id="b"><b>GP<i>.</i></b><span id="t">Dashboard</span></button>`;
-    root.getElementById('b').onclick = async () => {
-      const t = root.getElementById('t'); t.textContent = 'Loading…';
+      span{max-width:0;overflow:hidden;white-space:nowrap;padding:0;border-radius:99px;background:linear-gradient(180deg,#f6ecd0,#d9c48c);color:#141413;transition:max-width .25s,padding .25s,margin .25s}
+      button:hover span,button.busy span{max-width:120px;padding:7px 12px;margin:0 4px}
+      button.drag span{max-width:0;padding:0;margin:0}
+    </style><button id="b" title="GP. Dashboard (drag to move)"><b>GP<i>.</i></b><span id="t">Dashboard</span></button>`;
+    const btn = root.getElementById('b');
+    let sx = 0, sy = 0, moved = false, down = false;
+    btn.addEventListener('pointerdown', e => { down = true; moved = false; sx = e.clientX; sy = e.clientY; btn.setPointerCapture(e.pointerId); });
+    btn.addEventListener('pointermove', e => {
+      if (!down) return;
+      if (!moved && Math.hypot(e.clientX - sx, e.clientY - sy) < 5) return;
+      moved = true; btn.classList.add('drag');
+      host.style.cssText = `position:fixed;z-index:2147483646;left:${e.clientX - 19}px;top:${e.clientY - 19}px`;
+    });
+    btn.addEventListener('pointerup', e => {
+      if (!down) return; down = false; btn.classList.remove('drag');
+      if (!moved) return;
+      pos.side = e.clientX < innerWidth / 2 ? 'left' : 'right';
+      pos.y = Math.min(0.95, Math.max(0.05, e.clientY / innerHeight));
+      GM_setValue('btnPos', pos); place();
+    });
+    btn.onclick = async e => {
+      if (moved) { moved = false; return; }
+      const t = root.getElementById('t'); t.textContent = 'Loading…'; btn.classList.add('busy');
       const path = location.pathname, aff = path.startsWith('/affiliates'), pay = path.startsWith('/portfolio');
       if (aff) { clickText('1Y'); await sleep(3000); }
       else if (pay) await pull('/portfolio', [{ click: 'Payouts', ms: 1500 }, { click: 'Export CSV', silent: 1, wait: 'payoutsAt', ms: 6000 }, { click: 'Withdrawals', ms: 1500 }, { click: 'Export CSV', silent: 1, wait: 'withdrawalsAt', ms: 6000 }]);
-      t.textContent = 'Dashboard';
+      t.textContent = 'Dashboard'; btn.classList.remove('busy');
       openDash(pay ? 'pay' : 'aff');
     };
     document.body.appendChild(host);
