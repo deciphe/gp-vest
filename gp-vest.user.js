@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.2.0
+// @version      1.2.1
 // @description  Your Vest affiliate earnings, unlock dates and payouts on one clean page. Data stays in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -30,21 +30,53 @@
 
   // ---------- read the data Vest's own pages load ----------
   // Copies JSON responses only. Never reads request headers, tokens or passwords.
-  const WANT = /api-gateway[^/]*\/v\d+\/(affiliate|capital|payout|withdraw|history|accounts|user-state)/i;
-  const isPayout = x => x && typeof x === 'object' && ('trader_amount' in x || 'requested_amount' in x);
+  const WANT = /api-gateway[^/]*\/v\d+\//i;
+  const pick = (x, ...ks) => { for (const k of ks) if (x[k] != null && x[k] !== '') return x[k]; };
+  const iso = v => v == null ? null : typeof v === 'number' ? new Date(v < 1e12 ? v * 1000 : v).toISOString() : v;
+  const STRONG = /^(trader_?amount|requested_?amount|payout_?amount)/i;
+  const keys = x => x && typeof x === 'object' && !Array.isArray(x) ? Object.keys(x) : [];
+  const strong = x => keys(x).some(k => STRONG.test(k));
+  const weak = x => { const k = keys(x).join(' '); return /\bid\b/.test(k) && /amount/i.test(k) && /status|state/i.test(k) && /created/i.test(k); };
+  function normPayout(x) {
+    const cents = pick(x, 'trader_amount_cents', 'traderAmountCents', 'amount_cents', 'amountCents');
+    return {
+      id: String(pick(x, 'id', 'payout_id', 'payoutId', 'withdrawal_id', 'uuid')),
+      account_id: String(pick(x, 'account_id', 'accountId', 'source_account_id', 'sourceAccountId') || ''),
+      trader_amount: cents != null ? Number(cents) / 100 : Number(pick(x, 'trader_amount', 'traderAmount', 'payout_amount', 'payoutAmount', 'amount', 'requested_amount', 'requestedAmount') || 0),
+      status: String(pick(x, 'status', 'state') || ''),
+      created_at: iso(pick(x, 'created_at', 'createdAt', 'created_at_ms', 'createdAtMs', 'requested_at', 'requestedAt')),
+      executed_at: iso(pick(x, 'executed_at', 'executedAt', 'executed_at_ms', 'completed_at', 'completedAt', 'paid_at', 'paidAt'))
+    };
+  }
+  function findPayouts(url, b, depth) {
+    if (depth > 3 || !b || typeof b !== 'object') return null;
+    const loose = /payout|withdraw/i.test(url);
+    if (Array.isArray(b)) return b.some(x => strong(x) || (loose && weak(x))) ? b.filter(x => strong(x) || (loose && weak(x))) : null;
+    for (const k in b) { const r = findPayouts(url, b[k], depth + 1); if (r) return r; }
+    return null;
+  }
+  const qp = (url, k) => { try { return new URL(url, location.href).searchParams.get(k); } catch (e) { return null; } };
+  // Drop analytics saved by older versions (they could keep a short date range).
+  { const a = GM_getValue('analytics', null); if (a && !a.from) GM_setValue('analytics', null); }
   function handle(url, b) {
     const now = Date.now();
     if (b && b.totals && Array.isArray(b.daily) && 'due_cents' in b.totals) {
-      const cur = store.get('analytics');
-      if (!cur || b.daily.length >= (cur.daily || []).length || now - (cur.at || 0) > 6e5) store.set('analytics', Object.assign({}, b, { at: now }));
+      const cur = store.get('analytics') || {};
+      const from = qp(url, 'from_date') || (b.daily[0] && b.daily[0].date) || '9999';
+      const byDate = {};
+      (cur.daily || []).forEach(r => { byDate[r.date] = r; });
+      b.daily.forEach(r => { byDate[r.date] = r; });
+      const daily = Object.values(byDate).sort((x, y) => x.date < y.date ? -1 : 1);
+      const act = daily.find(r => ['due_cents', 'pending_cents', 'paid_cents', 'net_cents'].some(k => r[k]));
+      const wider = !cur.totals || from <= (act ? act.date : from);
+      store.set('analytics', { totals: wider ? b.totals : cur.totals, from: wider ? from : cur.from, daily, at: now });
       return;
     }
-    let arr = null;
-    if (Array.isArray(b) && b.some(isPayout)) arr = b;
-    else if (b && typeof b === 'object') for (const k in b) if (Array.isArray(b[k]) && b[k].some(isPayout)) { arr = b[k]; break; }
-    if (arr) {
+    if (/\/affiliate\//i.test(url)) return;
+    const arr = findPayouts(url, b, 0);
+    if (arr && arr.length) {
       const cur = store.get('payouts') || {};
-      arr.filter(isPayout).forEach(x => { if (x.id) cur[x.id] = x; });
+      arr.map(normPayout).forEach(x => { if (x.id && x.id !== 'undefined' && x.created_at) cur[x.id] = x; });
       store.set('payouts', cur); store.set('payoutsAt', now);
     }
   }
@@ -96,15 +128,17 @@
       const f = document.createElement('iframe');
       f.style.cssText = 'position:fixed;left:-9999px;top:0;width:1280px;height:900px;opacity:0;pointer-events:none';
       f.src = path; document.documentElement.appendChild(f);
-      let n = 0, clicked = false;
-      const end = () => { clearInterval(t); f.remove(); done(); };
+      let n = 0, clicked = false, tc = 0, fin = false, gone = false;
+      const end = () => { if (gone) return; gone = true; clearInterval(t); f.remove(); done(); };
       const t = setInterval(() => {
         n++;
         try {
           const d = f.contentDocument, b = d && [...d.querySelectorAll('button,[role=tab]')].find(x => x.textContent.trim() === tab);
-          if (b && !clicked) { b.click(); clicked = true; n = Math.max(n, 30); }
+          if (b && !clicked) { b.click(); clicked = true; tc = Date.now(); }
         } catch (e) {}
-        if (n >= 40) end();
+        const k = path === '/affiliates' ? 'analytics' : 'payoutsAt', v = GM_getValue(k, null), at = k === 'analytics' ? v && v.at : v;
+        if (clicked && at && at > tc && !fin) { fin = true; setTimeout(end, 1500); }
+        else if (n >= 60) end();
       }, 250);
     });
   }
