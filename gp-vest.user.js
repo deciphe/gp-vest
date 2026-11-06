@@ -1,15 +1,19 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.7.0
-// @description  Your whole Vest profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
+// @version      1.8.0
+// @description  Your whole Vest or MyFundedPerps profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
+// @match        https://myfundedperpetuals.com/*
+// @match        https://*.myfundedperpetuals.com/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addValueChangeListener
 // @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
+// @connect      developers.myfundedperpetuals.com
 // @updateURL    https://gigaprop.xyz/gp-vest.user.js
 // @downloadURL  https://gigaprop.xyz/gp-vest.user.js
 // ==/UserScript==
@@ -221,17 +225,19 @@
     });
     const PO = (D.payouts || []).filter(p => !/fail|reject|cancel/i.test(p.status));
     PO.forEach(p => { const a = A[p.acct]; const L = a && lines[a.root]; if (L) { L.paid += p.amt; L.pays++; } });
+    const TRADING = !!D.tradingOnly;
     const T = D.trades.map(t => Object.assign({ net: t.pnl - t.fee - t.fund, hold: Math.max(0, t.t1 - t.t0), root: (A[t.acct] || {}).root || t.acct }, t)).sort((a, b) => a.t1 - b.t1);
+    if (TRADING) T.forEach(t => { const a = A[t.acct]; const L = a && lines[a.root]; if (L) { L.paid += t.net; } });
     const opts = {
       kind: ['Funded', 'Instant', 'Eval', 'Primary'].filter(k => D.accounts.some(a => a.kind === k)),
-      status: ['Active', 'Passed', 'Hit MLL', 'Hit DLL', 'Refunded'].filter(s => D.accounts.some(a => a.status === s)),
+      status: ['Active', 'Passed', 'Hit MLL', 'Hit DLL', 'Failed', 'Closed', 'Refunded'].filter(s => D.accounts.some(a => a.status === s)),
       size: [...new Set(D.accounts.filter(a => a.size).map(a => a.size))].sort((a, b) => a - b).map(String),
       plan: [...new Set(D.accounts.filter(a => a.kind !== 'Primary').map(a => a.plan))].sort(),
       mkt: [...new Set(T.map(t => t.sym))].sort((a, b) => T.filter(t => t.sym === b).length - T.filter(t => t.sym === a).length),
       exit: [...new Set(T.map(t => t.reason))]
     };
     const label = { kind: v => v === 'Eval' ? 'Evaluation' : v === 'Instant' ? 'Instant funded' : v, status: v => v, size: v => sizeName(+v), plan: v => v, mkt: v => v, exit: v => exitName(v) };
-    const DEF = () => ({ range: 'all', from: '', to: '', side: 'all', res: 'all', q: '', line: '', scope: 'funded', kind: new Set(), status: new Set(), size: new Set(), plan: new Set(), mkt: new Set(), exit: new Set() });
+    const DEF = () => ({ range: 'all', from: '', to: '', side: 'all', res: 'all', q: '', line: '', scope: TRADING && !D.accounts.some(a => a.kind === 'Funded') ? 'all' : 'funded', kind: new Set(), status: new Set(), size: new Set(), plan: new Set(), mkt: new Set(), exit: new Set() });
     const F = DEF();
     let SORT = { k: 't1', d: -1 }, PAGE = 0, EQM = 'event', ACCSORT = 'new';
   
@@ -260,6 +266,7 @@
     }
     function econ() {
       const Ls = Object.values(lines).filter(L => lineOk(L) && (!F.status.size || F.status.has(L.status)));
+      if (TRADING) { const X = filteredTrades(); const ev = X.map(t => ({ t: t.t1, v: t.net, lab: t.sym + ' ' + t.side })); const w = X.filter(t => t.net > 0).reduce((s, t) => s + t.net, 0), l = -X.filter(t => t.net < 0).reduce((s, t) => s + t.net, 0); return { Ls, buys: [], pays: [], spent: l, paid: w, net: w - l, events: ev }; }
       const ids = new Set(Ls.map(L => L.id));
       const buys = Ls.filter(L => inRange(L.created)).map(L => ({ t: L.created, v: -L.cost, lab: L.plan + ' bought' }));
       const pays = PO.filter(p => { const a = A[p.acct]; return a && ids.has(a.root) && inRange(p.at); }).map(p => ({ t: p.at, v: p.amt, lab: 'Payout · ' + (A[p.acct].plan || '') }));
@@ -279,11 +286,13 @@
       const big = v => { const a = Math.abs(v), w = Math.floor(a), c = Math.round((a - w) * 100); return (v < 0 ? '−$' : '$') + w.toLocaleString('en-US') + '<small>.' + String(c === 100 ? 0 : c).padStart(2, '0') + '</small>'; };
       $('net').innerHTML = big(E.net); $('net').classList.toggle('neg', E.net < 0);
       const bought = E.Ls.filter(L => L.cost > 0).length, fundedL = E.Ls.filter(L => L.funded), paidL = E.Ls.filter(L => L.paid > 0);
-      $('scope').textContent = F.line ? sizeName(lines[F.line].size) + ' ' + lines[F.line].plan : F.plan.size ? [...F.plan].join(' · ') : 'Payouts minus account costs';
-      $('of').innerHTML = `<b>${money(E.paid)}</b> paid out · <b>${money(E.spent)}</b> spent`;
+      $('scope').textContent = F.line ? sizeName(lines[F.line].size) + ' ' + lines[F.line].plan : F.plan.size ? [...F.plan].join(' · ') : TRADING ? 'Closed trades, after fees' : 'Payouts minus account costs';
+      root.querySelector('.hero .k').textContent = TRADING ? 'Trading PnL' : 'Real PnL';
+      root.querySelector('.cash .lab').innerHTML = TRADING ? '<span class="k">Equity</span>Every closed trade' : '<span class="k">Cash</span>Payouts in, accounts out';
+      $('of').innerHTML = TRADING ? `<b>${money(E.paid)}</b> won · <b>${money(E.spent)}</b> lost · <b>${X.length}</b> trades` : `<b>${money(E.paid)}</b> paid out · <b>${money(E.spent)}</b> spent`;
       const mx = Math.max(E.paid, E.spent, 1);
-      $('ratio').innerHTML = `<div><span>Paid</span><i style="width:${E.paid / mx * 100}%;background:var(--mint)"></i></div><div><span>Spent</span><i style="width:${E.spent / mx * 100}%;background:var(--rose)"></i></div>`;
-      $('ret').textContent = E.spent ? (E.paid / E.spent).toFixed(2) + 'x return' : '';
+      $('ratio').innerHTML = `<div><span>${TRADING ? 'Won' : 'Paid'}</span><i style="width:${E.paid / mx * 100}%;background:var(--mint)"></i></div><div><span>${TRADING ? 'Lost' : 'Spent'}</span><i style="width:${E.spent / mx * 100}%;background:var(--rose)"></i></div>`;
+      $('ret').textContent = TRADING ? (isFinite(S.pf) ? 'Profit factor ' + S.pf.toFixed(2) : '') : E.spent ? (E.paid / E.spent).toFixed(2) + 'x return' : '';
   
       const evL = E.Ls.filter(L => L.kind0 === 'Eval'), passed = evL.filter(L => L.funded).length, done = evL.filter(L => L.funded || /Hit|Refunded/.test(L.status)).length;
       const K = [
@@ -294,15 +303,17 @@
         ['Eval pass rate', done ? pct(passed / done) : '—', `${passed} of ${done}`],
         ['Funded → paid', fundedL.length ? pct(paidL.length / fundedL.length) : '—', `${paidL.length} of ${fundedL.length}`]
       ];
+      if (TRADING) { const allL = Object.values(lines).filter(L => lineOk(L)), fu = allL.filter(L => L.funded).length, pa = allL.filter(L => L.status === 'Passed').length, fa = allL.filter(L => L.status === 'Failed').length;
+        K.splice(0, K.length, ['Win rate', pct(S.wr, 1), `${S.wins}W · ${S.losses}L`], ['Profit factor', isFinite(S.pf) ? S.pf.toFixed(2) : '—', 'Avg win ' + money(S.aw, 0)], ['Avg loss', money(S.al, 0), 'Per losing trade'], ['Accounts', allL.length, fu + ' funded'], ['Pass rate', pa + fa ? pct(pa / (pa + fa)) : '—', `${pa} passed · ${fa} failed`], ['Fees', money(S.fees), 'Median hold ' + (S.n ? dur(S.med) : '—')]); }
       $('kpis').innerHTML = K.map(k => `<div class="card kpi"><div class="lab">${k[0]}</div><b class="${k[3] || ''}">${k[1]}</b><small>${k[2]}</small></div>`).join('');
   
       // account types
       const byPlan = {}; Object.values(lines).filter(L => (!F.line || L.id === F.line) && (!F.q)).forEach(L => { if (!inRange(L.created) && !E.pays.length) return; const k = L.plan; const g = byPlan[k] = byPlan[k] || { plan: L.plan, size: L.size, n: 0, cost: 0, f: 0, p: 0, paid: 0, mll: L.mll, dll: L.dll, target: L.target, split: L.split };
-        const inR = inRange(L.created); if (inR) { g.n++; g.cost += L.cost; if (L.funded) g.f++; if (L.paid) g.p++; }
-        g.paid += PO.filter(p => (A[p.acct] || {}).root === L.id && inRange(p.at)).reduce((s, p) => s + p.amt, 0); });
+        const inR = inRange(L.created); if (inR) { g.n++; g.cost += L.cost; if (L.funded) g.f++; if (L.paid) g.p++; if (L.status === 'Passed') g.ps = (g.ps || 0) + 1; }
+        g.paid += TRADING ? L.paid : PO.filter(p => (A[p.acct] || {}).root === L.id && inRange(p.at)).reduce((s, p) => s + p.amt, 0); });
       $('types').innerHTML = Object.values(byPlan).filter(g => g.n || g.paid).sort((a, b) => b.n - a.n).map(g => { const r = g.paid - g.cost, on = F.plan.has(g.plan), fx = g.n ? g.f / g.n : 0, px = g.n ? g.p / g.n : 0;
-        return `<div class="card ty ${on ? 'sel' : ''}" data-k="${esc(g.plan)}"><div class="tyH"><div><b>${esc(sizeName(g.size))} ${esc(g.plan)}</b><small>MLL ${money(g.size * g.mll, 0)} · ${g.dll ? 'DLL ' + money(g.size * g.dll, 0) : 'No DLL'}${g.target ? ' · Target ' + money(g.target, 0) : ''} · ${Math.round(g.split * 100)}%</small></div><em class="${cls(r)}">${sMoney(r, 0)}</em></div>
-          <div class="fun"><div><span>${g.n}</span><small>bought · ${money(g.n ? g.cost / g.n : 0)}</small><i style="width:100%"></i></div><div><span>${g.f}</span><small>funded · ${pct(fx)}</small><i style="width:${fx * 100}%"></i></div><div><span>${g.p}</span><small>paid · ${money(g.paid, 0)}</small><i style="width:${px * 100}%;background:var(--mint)"></i></div></div></div>`; }).join('');
+        return `<div class="card ty ${on ? 'sel' : ''}" data-k="${esc(g.plan)}"><div class="tyH"><div><b>${esc(sizeName(g.size))} ${esc(g.plan)}</b><small>MLL ${money(g.size * g.mll, 0)} · ${g.dll ? 'DLL ' + money(g.size * g.dll, 0) : 'No DLL'}${g.target ? ' · Target ' + money(g.target, 0) : ''}${g.split ? ' · ' + Math.round(g.split * 100) + '%' : ''}</small></div><em class="${cls(r)}">${sMoney(r, 0)}</em></div>
+          <div class="fun"><div><span>${g.n}</span><small>${TRADING ? 'accounts' : 'bought · ' + money(g.n ? g.cost / g.n : 0)}</small><i style="width:100%"></i></div>${TRADING ? `<div><span>${g.ps || 0}</span><small>passed</small><i style="width:${g.n ? (g.ps || 0) / g.n * 100 : 0}%"></i></div>` : `<div><span>${g.f}</span><small>funded · ${pct(fx)}</small><i style="width:${fx * 100}%"></i></div>`}<div><span>${g.p}</span><small>${TRADING ? 'pnl ' + sMoney(g.paid, 0) : 'paid · ' + money(g.paid, 0)}</small><i style="width:${px * 100}%;background:var(--mint)"></i></div></div></div>`; }).join('');
       $('types').querySelectorAll('.ty').forEach(r => r.onclick = () => { const k = r.dataset.k; F.plan.has(k) ? F.plan.delete(k) : F.plan.add(k); PAGE = 0; render(); });
   
       $('tScope').textContent = (F.scope === 'funded' ? 'Funded accounts' : 'All accounts') + ' · ' + S.n + ' trades';
@@ -369,7 +380,7 @@
         return `<div class="acc ${F.line === L.id ? 'sel' : ''}" data-id="${L.id}"><div class="t"><span>${sizeName(L.size)} ${esc(L.plan)}</span><span class="st ${L.status.replace(/\W/g, '')}">${esc(L.status)}</span></div>
         <div class="p">${esc(path(L))}${L.funded ? ' ✓' : ''} · ${fmtD(L.created)}</div>
         <div class="p">MLL ${money(L.size * L.mll, 0)} · ${L.dll ? 'DLL ' + money(L.size * L.dll, 0) : 'No DLL'}${L.target ? ' · Target ' + money(L.target, 0) : ''} · ${Math.round(L.split * 100)}% split</div>
-        <div class="v"><span>Cost ${money(L.cost)}${L.paid ? ' · Paid ' + money(L.paid) : ''}</span><b class="${cls(r)}">${sMoney(r)}</b></div></div>`; }).join('') || '<div class="count">No accounts match</div>';
+        <div class="v"><span>${TRADING ? 'Trading PnL' : 'Cost ' + money(L.cost) + (L.paid ? ' · Paid ' + money(L.paid) : '')}</span><b class="${cls(r)}">${sMoney(r)}</b></div></div>`; }).join('') || '<div class="count">No accounts match</div>';
       $('accs').querySelectorAll('.acc').forEach(el => el.onclick = () => { F.line = F.line === el.dataset.id ? '' : el.dataset.id; if (F.line) F.kind.clear(); PAGE = 0; render(); });
     }
   
@@ -516,6 +527,58 @@
     GM_setValue('profile', D); say('');
     return D;
   }
+
+  // ---------- MyFundedPerps: your own API key, read-only calls to MFP's API ----------
+  const IS_MFP = /(^|\.)myfundedperpetuals\.com$/.test(location.hostname);
+  const MFP_API = 'https://developers.myfundedperpetuals.com/v1';
+  function mreq(path) {
+    const key = GM_getValue('mfpKey', '');
+    if (!key) return Promise.reject(new Error('nokey'));
+    return new Promise((ok, no) => GM_xmlhttpRequest({ method: 'GET', url: MFP_API + path, headers: { Authorization: 'Bearer ' + key, Accept: 'application/json' }, timeout: 20000,
+      onload: r => { if (r.status === 401 || r.status === 403) return no(new Error('badkey')); if (r.status !== 200) return no(new Error('http ' + r.status)); try { ok(JSON.parse(r.responseText)); } catch (e) { no(e); } },
+      onerror: () => no(new Error('net')), ontimeout: () => no(new Error('net')) }));
+  }
+  async function scrapeMFP(prog) {
+    const say = t => { if (prog) prog.textContent = t; };
+    say('Reading accounts…');
+    const accs = (await mreq('/accounts')).data || [];
+    const ts = v => typeof v === 'number' ? (v < 1e12 ? v * 1000 : v) : Date.parse(v) || 0;
+    const pc = v => v == null || v === '' ? 0 : (+v > 1 ? +v / 100 : +v);
+    const trimPct = v => String(Math.round(v * 1000) / 10).replace(/\.0$/, '');
+    const accounts = accs.map(a => {
+      const rq = (a.risk && a.risk.requirements) || {}, size = +a.starting_balance || 0, tg = pc(rq.profit_target_pct), dl = pc(rq.daily_loss_pct), md = pc(rq.max_drawdown_pct);
+      const plan = (a.stage === 'funded' ? 'Funded' : (tg ? trimPct(tg) + '% target' : 'Evaluation')) + (dl ? ' · ' + trimPct(dl) + '% DLL' : ' · No DLL');
+      return { id: String(a.id), root: String(a.id), kind: a.stage === 'funded' ? 'Funded' : 'Eval', status: ({ active: 'Active', passed: 'Passed', failed: 'Failed', closed: 'Closed' })[a.status] || 'Active', size, plan, step: 1, steps: 1, created: ts(a.created_at), ended: null, mll: md, dll: dl, target: tg * size, split: 0, origin: a.stage, cost: 0, balance: +a.balance || 0 };
+    });
+    const trades = []; let done = 0;
+    const one = async a => {
+      let cur = '', n = 0;
+      do {
+        const j = await mreq(`/positions?account_id=${encodeURIComponent(a.id)}&status=closed&limit=100${cur ? '&cursor=' + encodeURIComponent(cur) : ''}`);
+        (j.data || []).forEach(x => { if (!x.closed_at) return; const sd = String(x.side || '').toLowerCase();
+          trades.push({ id: String(x.id), acct: String(x.account_id || a.id), sym: x.symbol || x.coin || String(x.market_id || '').split('|').pop(), side: /short|sell/.test(sd) ? 'short' : 'long', qty: +x.size || 0, open: +x.entry_price || 0, close: +x.exit_price || 0, t0: ts(x.opened_at), t1: ts(x.closed_at), pnl: +x.realized_pnl || 0, fee: +x.fees || 0, fund: +x.funding || 0, lev: +x.leverage || 0, reason: x.close_reason || '' }); });
+        cur = j.has_more ? j.next_cursor : '';
+      } while (cur && ++n < 200);
+      done++; say(`Trades ${done}/${accounts.length} accounts`);
+    };
+    const q = accounts.slice(); await Promise.all([0, 1, 2].map(async () => { while (q.length) await one(q.shift()); }));
+    const D = { at: Date.now(), accounts, trades, payouts: [], tradingOnly: true };
+    GM_setValue('mfpProfile', D); say('');
+    return D;
+  }
+  function mfpKeyCard(ROOT, el, done) {
+    const c = document.createElement('div');
+    c.innerHTML = `<div class="card" style="max-width:460px;margin:12vh auto 0;padding:30px;display:flex;flex-direction:column;gap:14px">
+      <div class="lab"><span class="k">MyFundedPerps</span>API key</div>
+      <input data-r="mk" type="password" autocomplete="off" spellcheck="false" placeholder="fp_live_…" style="background:rgba(247,246,242,.04);border:1px solid var(--line);color:var(--fg);font:600 14px var(--sans);padding:13px 14px;border-radius:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><a href="https://docs.myfundedperpetuals.com/settings/api-keys" target="_blank" rel="noopener" style="color:var(--faint);font-size:12px;font-weight:700;text-decoration:none">Where to find it ↗</a><button class="pill" data-r="mks">Save</button></div>
+      <span class="count" data-r="mke"></span></div>`;
+    el.querySelector('.wrap').appendChild(c);
+    const inp = c.querySelector('[data-r=mk]'), msg = c.querySelector('[data-r=mke]');
+    c.querySelector('[data-r=mks]').onclick = () => { const v = inp.value.trim(); if (!/^fp_(live|test)_/.test(v)) { msg.textContent = 'Keys start with fp_live_'; return; } GM_setValue('mfpKey', v); done(); };
+    inp.onkeydown = e => { if (e.key === 'Enter') c.querySelector('[data-r=mks]').click(); };
+    setTimeout(() => inp.focus(), 50);
+  }
   function closeProfile() { const h = document.getElementById('gp-prof'); if (h) h.remove(); document.documentElement.style.overflow = ''; }
   function openProfile() {
     closeProfile(); closeDash(); fonts();
@@ -524,15 +587,18 @@
     ROOT.innerHTML = '<style>' + PCSS + '.gpp{position:fixed;inset:0;overflow:auto;z-index:2147483647;min-height:0}</style><div class="gpp">' + PBODY + '</div>';
     document.documentElement.appendChild(HOST); document.documentElement.style.overflow = 'hidden';
     const el = ROOT.querySelector('.gpp');
-    const D = GM_getValue('profile', null) || { at: 0, accounts: [], trades: [] };
+    const KEY = IS_MFP ? 'mfpProfile' : 'profile', SCRAPE = IS_MFP ? scrapeMFP : scrapeProfile;
+    const D = GM_getValue(KEY, null) || { at: 0, accounts: [], trades: [], tradingOnly: IS_MFP };
     const run = async (btn, prog) => {
       btn.disabled = true; btn.classList.add('spin');
-      try { await scrapeProfile(prog); btn.classList.remove('spin'); openProfile(); }
-      catch (e) { btn.disabled = false; btn.classList.remove('spin'); prog.textContent = String(e).includes('noauth') ? 'Sign in to Vest, wait a moment, then try again' : 'Vest didn\'t answer, try again'; }
+      try { await SCRAPE(prog); btn.classList.remove('spin'); openProfile(); }
+      catch (e) { btn.disabled = false; btn.classList.remove('spin'); const m = String(e); if (/nokey|badkey/.test(m)) { GM_setValue('mfpKey', ''); openProfile(); return; } prog.textContent = m.includes('noauth') ? 'Sign in to Vest, wait a moment, then try again' : 'No answer, try again'; }
     };
-    const lk = ROOT.querySelector('.lock'); lk.style.cursor = 'pointer'; lk.onclick = () => { closeProfile(); openGate(); };
+    const lk = ROOT.querySelector('.lock'); lk.style.cursor = 'pointer'; lk.onclick = () => { closeProfile(); if (!IS_MFP) openGate(); };
+    if (IS_MFP) { ROOT.querySelector('.lx').style.display = 'none'; ROOT.querySelector('.vm').style.display = 'none'; ROOT.querySelector('.brand span').textContent = 'MFP Profile'; }
+    if (IS_MFP && !GM_getValue('mfpKey', '')) { [...el.querySelector('.wrap').children].forEach(x => { if (!x.classList.contains('top')) x.style.display = 'none'; }); ROOT.querySelector('.hdr-r').style.visibility = 'hidden'; mfpKeyCard(ROOT, el, () => openProfile()); return; }
     GPProfile(el, D, { theme: GM_getValue('theme', null) || 'cream', saveTheme: v => GM_setValue('theme', v), onClose: closeProfile, onRefresh: run });
-    if (!D.payouts) setTimeout(() => run(ROOT.querySelector('[data-r=refresh]'), ROOT.querySelector('[data-r=prog]')), 300);
+    if (IS_MFP ? !D.at : !D.payouts) setTimeout(() => run(ROOT.querySelector('[data-r=refresh]'), ROOT.querySelector('[data-r=prog]')), 300);
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeProfile(); });
 
@@ -814,7 +880,7 @@ load().then(S => setTheme(S.theme || 'cream'));
       pos.y = Math.min(0.95, Math.max(0.05, e.clientY / innerHeight));
       GM_setValue('btnPos', pos); place();
     });
-    btn.onclick = e => { if (moved) { moved = false; return; } openGate(); };
+    btn.onclick = e => { if (moved) { moved = false; return; } IS_MFP ? openProfile() : openGate(); };
     document.body.appendChild(host);
   }
   setInterval(gpButton, 1200);

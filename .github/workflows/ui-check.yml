@@ -18,3 +18,5 @@ jobs:
         run: node tests/audit.js index.html
       - name: Dashboard and profile overlays, 9 screen sizes
         run: node tests/harness.js
+      - name: MyFundedPerps key flow and profile, 4 screen sizes
+        run: node tests/mfp.js
