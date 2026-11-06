@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.5.3
-// @description  Your Vest affiliate earnings, unlock dates and payouts on one clean page. Data stays in your browser.
+// @version      1.6.0
+// @description  Your whole Vest profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
 // @run-at       document-start
@@ -529,6 +529,9 @@
       try { await scrapeProfile(prog); btn.classList.remove('spin'); openProfile(); }
       catch (e) { btn.disabled = false; btn.classList.remove('spin'); prog.textContent = String(e).includes('noauth') ? 'Sign in to Vest, wait a moment, then try again' : 'Vest didn\'t answer, try again'; }
     };
+    const hr = ROOT.querySelector('.hdr-r'), eb = document.createElement('button');
+    eb.className = 'ib'; eb.style.cssText = 'width:auto;padding:0 14px;font:800 12.5px var(--sans);color:var(--fg)'; eb.textContent = 'Earnings';
+    eb.onclick = () => { closeProfile(); openDash('aff'); }; hr.insertBefore(eb, ROOT.querySelector('[data-r=refresh]'));
     GPProfile(el, D, { theme: GM_getValue('theme', null) || 'cream', saveTheme: v => GM_setValue('theme', v), onClose: closeProfile, onRefresh: run });
     if (!D.payouts) setTimeout(() => run(ROOT.querySelector('[data-r=refresh]'), ROOT.querySelector('[data-r=prog]')), 300);
   }
@@ -741,8 +744,9 @@ load().then(S => setTheme(S.theme || 'cream'));
       span{max-width:0;overflow:hidden;white-space:nowrap;padding:0;border-radius:99px;background:linear-gradient(180deg,#f6ecd0,#d9c48c);color:#141413;transition:max-width .25s,padding .25s,margin .25s}
       button:hover span,button.busy span{max-width:120px;padding:7px 12px;margin:0 4px}
       button.drag span{max-width:0;padding:0;margin:0}
-    </style><button id="b" title="GP. Dashboard (drag to move)"><b>GP<i>.</i></b><span id="t">Dashboard</span></button>`;
+    </style><button id="b" title="GP. Profile (drag to move)"><b>GP<i>.</i></b><span id="t">Profile</span></button>`;
     const btn = root.getElementById('b');
+    setInterval(() => { const t = root.getElementById('t'); if (!btn.classList.contains('busy')) t.textContent = location.pathname.startsWith('/affiliates') ? 'Earnings' : 'Profile'; }, 1000);
     let sx = 0, sy = 0, moved = false, down = false;
     btn.addEventListener('pointerdown', e => { down = true; moved = false; sx = e.clientX; sy = e.clientY; btn.setPointerCapture(e.pointerId); });
     btn.addEventListener('pointermove', e => {
@@ -762,9 +766,10 @@ load().then(S => setTheme(S.theme || 'cream'));
       if (moved) { moved = false; return; }
       const t = root.getElementById('t'); t.textContent = 'Loading…'; btn.classList.add('busy');
       const path = location.pathname, aff = path.startsWith('/affiliates'), pay = path.startsWith('/portfolio');
+      if (!aff) { t.textContent = 'Profile'; btn.classList.remove('busy'); openProfile(); return; }
       if (aff) { clickText('1Y'); await sleep(3000); }
       else if (pay) await pull('/portfolio', [{ click: 'Payouts', ms: 1500 }, { click: 'Export CSV', silent: 1, wait: 'payoutsAt', ms: 6000 }, { click: 'Withdrawals', ms: 1500 }, { click: 'Export CSV', silent: 1, wait: 'withdrawalsAt', ms: 6000 }]);
-      t.textContent = 'Dashboard'; btn.classList.remove('busy');
+      t.textContent = 'Profile'; btn.classList.remove('busy');
       openDash(pay ? 'pay' : 'aff');
     };
     document.body.appendChild(host);

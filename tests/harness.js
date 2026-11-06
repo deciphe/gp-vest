@@ -23,15 +23,15 @@ const audit = fs.readFileSync(path.join(__dirname, 'audit-fn.js'), 'utf8');
 (async () => {
   const b = await chromium.launch(); let bad = 0;
   for (const view of ['dashboard', 'profile']) for (const [w, h] of VPS) {
-    const ctx = await b.newContext({ viewport: { width: w, height: h } }); const p = await ctx.newPage(); const errs = [];
+    const ctx = await b.newContext({ viewport: { width: w, height: h } }); const p = await ctx.newPage(); const errs = []; const r0 = [];
     p.on('pageerror', e => errs.push(e.message));
     await ctx.route('https://next.vestmarkets.com/**', r => r.fulfill({ contentType: 'text/html', body: '<html><body style="background:#111"></body></html>' }));
     await ctx.route('https://fonts.googleapis.com/**', r => r.fulfill({ contentType: 'text/css', body: '' }));
     await ctx.addInitScript(`window.__s=${JSON.stringify(S)};window.GM_getValue=(k,d)=>k in window.__s?window.__s[k]:d;window.GM_setValue=(k,v)=>{window.__s[k]=v};window.unsafeWindow=window;` + US);
-    await p.goto('https://next.vestmarkets.com/trade'); await p.waitForTimeout(1500);
-    await p.click('#gp-btn >> button'); await p.waitForTimeout(1200);
-    if (view === 'profile') { await p.click('#gp-dash >> #gpProfile'); await p.waitForTimeout(1200); }
-    const r = (await p.evaluate(audit + '()')).filter(x => !/tiny text 9.5px: span/.test(x)); if (errs.length) r.push('JS errors: ' + errs.join(' | '));
+    await p.goto('https://next.vestmarkets.com/' + (view === 'profile' ? 'trade' : 'affiliates')); await p.waitForTimeout(1500);
+    await p.click('#gp-btn >> button'); await p.waitForTimeout(view === 'profile' ? 1200 : 4200);
+    if (!(await p.$(view === 'profile' ? '#gp-prof' : '#gp-dash'))) r0.push(view + ' did not open');
+    const r = r0.concat(await p.evaluate(audit + '()')).filter(x => !/tiny text 9.5px: span/.test(x)); if (errs.length) r.push('JS errors: ' + errs.join(' | '));
     if (r.length) { bad++; console.log(`\n${view} @ ${w}x${h}\n  - ` + r.join('\n  - ')); }
     await ctx.close();
   }
