@@ -1,0 +1,80 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GP. Vest Profile</title>
+<meta name="description" content="See your whole Vest profile: every account, every trade, what you spent and what you got paid.">
+<meta property="og:title" content="GP. — your whole Vest profile"><meta property="og:description" content="Every account. Every trade. What you spent, what you got paid."><meta property="og:image" content="profile.jpg"><meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--rgb:239,226,189;--hi1:#fff7df;--hi2:#efe2bd;--hi3:#c9b27a;--btn1:#f6ecd0;--btn2:#d9c48c;--bg:#0f0f0e;--card:rgba(28,28,26,.72);--line:rgba(247,246,242,.09);--line2:rgba(239,226,189,.22);--fg:#f7f6f2;--mute:rgba(247,246,242,.62);--faint:rgba(247,246,242,.38);--cream:#efe2bd;--mint:#8fdcb4}
+*{box-sizing:border-box}html,body{margin:0;overflow-x:hidden;background:var(--bg);color:var(--fg);font-family:"Manrope",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+#sky{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.w{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:28px 16px 80px}
+nav{display:flex;justify-content:space-between;align-items:center;gap:16px}
+.lock{display:flex;align-items:center;gap:14px}.vm{position:relative;display:block;width:54px}.vm svg{display:block;width:100%;height:auto;filter:drop-shadow(0 0 14px rgba(var(--rgb),.35))}
+.lx{color:var(--faint);font-weight:600}.brand{font-size:20px;font-weight:800;letter-spacing:-.04em}.brand i{font-style:normal;color:var(--cream)}
+.code{font-size:12px;font-weight:700;color:var(--mute);text-decoration:none;padding:9px 14px;border-radius:99px;border:1px solid var(--line2);background:linear-gradient(150deg,rgba(var(--rgb),.12),rgba(var(--rgb),.02))}.code b{color:var(--cream)}
+.hero{position:relative;text-align:center;padding:90px 0 40px;overflow:visible}
+.moon{position:absolute;left:50%;top:-40px;width:760px;height:760px;transform:translateX(-50%);opacity:.55;pointer-events:none;-webkit-mask-image:linear-gradient(180deg,#000 30%,transparent 85%);mask-image:linear-gradient(180deg,#000 30%,transparent 85%)}
+h1{position:relative;margin:0;font-size:clamp(48px,9vw,112px);font-weight:800;letter-spacing:-.065em;line-height:.9;background:linear-gradient(180deg,var(--hi1),var(--hi2) 55%,var(--hi3));-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{position:relative;margin:22px auto 0;max-width:560px;font-size:18px;font-weight:600;color:var(--mute);line-height:1.5}
+.cta{position:relative;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:15px 24px;border-radius:99px;font-size:15px;font-weight:800;text-decoration:none;transition:transform .2s,border-color .2s}
+.btn.p{background:linear-gradient(180deg,var(--btn1),var(--btn2));color:#141413;box-shadow:0 18px 50px -18px rgba(var(--rgb),.6)}
+.btn.s{border:1px solid var(--line2);color:var(--fg);background:rgba(247,246,242,.03)}
+.btn:hover{transform:translateY(-2px)}
+.shot{position:relative;margin:56px auto 0;border-radius:22px;padding:8px;background:linear-gradient(160deg,rgba(var(--rgb),.25),rgba(var(--rgb),.03) 40%);box-shadow:0 60px 120px -50px rgba(0,0,0,.9)}
+.shot img{display:block;width:100%;height:auto;border-radius:16px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:64px}
+.card{background:var(--card);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:22px;padding:24px}
+.n{font-size:11px;letter-spacing:.22em;font-weight:800;color:var(--cream)}
+.st b{display:block;margin-top:12px;font-size:19px;font-weight:800;letter-spacing:-.02em}
+.st span{display:block;margin-top:6px;font-size:13.5px;font-weight:600;color:var(--faint)}
+.st a{color:var(--cream);text-decoration:none;font-weight:800}
+.feat{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:14px}
+.feat b{display:block;font-size:15px;font-weight:800}.feat span{display:block;margin-top:6px;font-size:13px;font-weight:600;color:var(--faint)}
+.two{display:grid;grid-template-columns:1.2fr 1fr;gap:14px;margin-top:14px;align-items:center}
+.two img{width:100%;height:auto;border-radius:14px;display:block}
+.two h2{margin:0;font-size:34px;letter-spacing:-.04em;line-height:1}.two p{color:var(--mute);font-weight:600;line-height:1.5}
+.priv{text-align:center;margin-top:64px;font-size:14px;font-weight:700;color:var(--faint)}.priv b{color:var(--mint)}
+footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:40px;padding-top:24px;border-top:1px solid var(--line);font-size:12px;font-weight:600;color:var(--faint)}
+@media (max-width:900px){.steps,.feat{grid-template-columns:1fr 1fr}.two{grid-template-columns:1fr}}
+@media (max-width:560px){.steps,.feat{grid-template-columns:1fr}.moon{width:480px;height:480px}.code span{display:none}}
+</style></head><body>
+<canvas id="sky"></canvas>
+<div class="w">
+ <nav><div class="lock"><span class="vm"><svg viewBox="-20 -30 589 400" aria-hidden="true"><defs><linearGradient id="vg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--hi1)" stop-opacity=".95"/><stop offset="1" stop-color="var(--hi3)" stop-opacity=".45"/></linearGradient><linearGradient id="vg2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--hi1)" stop-opacity=".85"/><stop offset="1" stop-color="var(--hi3)" stop-opacity=".2"/></linearGradient><linearGradient id="vg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--hi2)" stop-opacity=".35"/><stop offset="1" stop-color="var(--hi3)" stop-opacity=".02"/></linearGradient></defs><path d="M130.463 1.64132L2.10114 104.296C0.259255 105.778 0.259255 108.571 2.10114 110.032L136.429 217.472V4.52427C136.429 1.43111 132.865 -0.260628 130.453 1.64132H130.463Z" fill="url(#vg1)"/><path d="M546.559 104.307L418.198 1.6418C415.785 -0.290179 412.222 1.43159 412.222 4.52475V217.483L546.559 110.043C548.401 108.561 548.401 105.768 546.559 104.307Z" fill="url(#vg2)"/><path d="M272.038 325.934L136.429 217.482V335.143C136.429 337.165 138.06 338.827 140.112 338.827H408.597C410.62 338.827 412.281 337.195 412.281 335.143V217.482L276.672 325.934C275.331 327.005 273.439 327.005 272.068 325.934H272.038Z" fill="url(#vg3)" stroke="var(--hi2)" stroke-opacity=".35" stroke-width="6"/></svg></span><span class="lx">×</span><span class="brand">GIGAPROP<i>.</i></span></div><a class="code" href="https://next.vestmarkets.com/r/isgigaprop" target="_blank" rel="noopener"><span>5% off Vest with </span>code <b>GIGA</b></a></nav>
+ <section class="hero">
+  <canvas class="moon" id="moon" width="1520" height="1520"></canvas>
+  <h1>Your whole<br>Vest profile.</h1>
+  <p class="sub">Every account. Every trade. What you spent, and what you got paid.</p>
+  <div class="cta"><a class="btn p" href="https://raw.githubusercontent.com/deciphe/gp-vest/main/gp-vest.user.js">Install GP. Profile</a><a class="btn s" href="https://www.tampermonkey.net/" target="_blank" rel="noopener">Get Tampermonkey</a></div>
+  <div class="shot"><img src="profile.jpg" alt="GP. Vest profile: real PnL, cash curve, account types and funded trading stats" width="2160" height="1440"></div>
+ </section>
+ <div class="steps">
+  <div class="card st"><div class="n">01</div><b>Get Tampermonkey</b><span>Free browser add-on. <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener">tampermonkey.net</a></span></div>
+  <div class="card st"><div class="n">02</div><b>Install GP.</b><span><a href="https://raw.githubusercontent.com/deciphe/gp-vest/main/gp-vest.user.js">One click</a>. Updates itself.</span></div>
+  <div class="card st"><div class="n">03</div><b>Open Vest</b><span>Tap the GP. button, then Profile.</span></div>
+ </div>
+ <div class="feat">
+  <div class="card"><b>Real PnL</b><span>Payouts minus what your accounts cost.</span></div>
+  <div class="card"><b>Every account</b><span>Plan, MLL, DLL, price, and how far it got.</span></div>
+  <div class="card"><b>Funded trading</b><span>Win rate, profit factor, markets, exits, hours.</span></div>
+  <div class="card"><b>Full history</b><span>All accounts, all closed trades, CSV export.</span></div>
+ </div>
+ <div class="card two">
+  <img src="dashboard.jpg" alt="GP. earnings dashboard: affiliate unlocks and payouts side by side" width="2160" height="1350" loading="lazy">
+  <div><h2>Earnings too.</h2><p>Affiliate unlocks, payouts and withdrawals, side by side.</p></div>
+ </div>
+ <p class="priv"><b>●</b> Runs in your browser. Nothing is sent anywhere.</p>
+ <footer><span>GP. is independent. Not made or endorsed by Vest Markets.</span><span>gigaprop</span></footer>
+</div>
+<script>
+function h(a,b){const s=Math.sin(a*127.1+b*311.7)*43758.5453;return s-Math.floor(s)}
+function vn(a,b){const i=Math.floor(a),j=Math.floor(b),f=a-i,k=b-j,u=f*f*(3-2*f),v=k*k*(3-2*k);return h(i,j)*(1-u)*(1-v)+h(i+1,j)*u*(1-v)+h(i,j+1)*(1-u)*v+h(i+1,j+1)*u*v}
+(function(){const c=document.getElementById('moon'),x=c.getContext('2d');x.setTransform(2,0,0,2,0,0);const C='239,226,189',CX=380,CY=380,R=330,g=7.5;
+const cr=[];for(let k=0;k<12;k++){const a=h(k,3)*6.283,rr=Math.sqrt(h(k,4))*R*.85;cr.push([CX+Math.cos(a)*rr,CY+Math.sin(a)*rr,R*(k<3?.14+h(k,5)*.05:.04+h(k,5)*.05)])}
+for(let j=0;j<760/(g*.866);j++)for(let i=0;i<760/g+1;i++){const px=i*g+(j%2?g/2:0),py=j*g*.866,dx=(px-CX)/R,dy=(py-CY)/R,d2=dx*dx+dy*dy;if(d2>=1)continue;const dz=Math.sqrt(1-d2);let l=Math.max(0,dx*-.08+dy*-.5+dz*.86);l*=1-.28*Math.min(1,Math.max(0,(vn(px/80+2,py/80)-.55)/.17));
+for(const[ax,ay,ar]of cr){const ox=(px-ax)/ar,oy=(py-ay)/ar,d=Math.hypot(ox,oy);if(d>1.2)continue;const w=Math.exp(-Math.pow((d-.85)/.18,2));l+=.45*w*(ox*-.08+oy*-.5)/Math.max(d,.2);if(d<.75)l*=.75}
+l=Math.min(1,Math.max(0,l));const r=g*.47*Math.pow(l,.8);if(r<.35)continue;x.fillStyle=`rgba(${C},${(.12+.55*l).toFixed(3)})`;x.beginPath();x.arc(px,py,r,0,6.283);x.fill()}})();
+(function(){const c=document.getElementById('sky'),x=c.getContext('2d');const d=()=>{const dp=devicePixelRatio||1,w=c.width=innerWidth*dp,hh=c.height=innerHeight*dp;x.clearRect(0,0,w,hh);const s=12*dp;x.fillStyle='rgba(239,226,189,.045)';for(let yy=0;yy<hh;yy+=s)for(let xx=0;xx<w;xx+=s){x.beginPath();x.arc(xx,yy,1.1*dp,0,6.283);x.fill()}for(let k=0;k<120;k++){x.fillStyle=`rgba(247,246,242,${.08+h(k,9)*.35})`;x.beginPath();x.arc(h(k,7)*w,h(k,8)*hh,(.5+h(k,6)*1.1)*dp,0,6.283);x.fill()}};d();addEventListener('resize',d)})();
+</script></body></html>
