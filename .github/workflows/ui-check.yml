@@ -1,0 +1,19 @@
+name: UI check
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm i --no-save playwright@1.48.2
+      - run: npx playwright install --with-deps chromium
+      - name: Landing page, 9 screen sizes
+        run: node tests/audit.js index.html
+      - name: Dashboard and profile overlays, 9 screen sizes
+        run: node tests/harness.js
