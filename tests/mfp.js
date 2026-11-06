@@ -1,6 +1,6 @@
 // MyFundedPerps flow: key card -> save -> pull accounts + closed positions from a stand-in API -> profile, audited at every size
 const { chromium } = require('playwright'); const fs = require('fs'), path = require('path');
-const US = fs.readFileSync(path.join(__dirname, '..', 'gp-vest.user.js'), 'utf8');
+const US = fs.readFileSync(path.join(__dirname, '..', 'gp-lab.user.js'), 'utf8');
 const audit = fs.readFileSync(path.join(__dirname, 'audit-fn.js'), 'utf8');
 const now = Date.now(), day = 864e5;
 const accounts = Array.from({ length: 9 }, (_, i) => ({ id: 'acc_' + i, account_number: 1000 + i, name: 'Challenge ' + i, stage: i < 3 ? 'funded' : 'evaluation', status: ['active', 'passed', 'failed', 'closed'][i % 4], starting_balance: i % 2 ? '10000' : '25000', balance: '10120', created_at: new Date(now - (20 - i) * day).toISOString(), risk: { requirements: { daily_loss_pct: i % 3 ? 4 : null, max_drawdown_pct: 8, profit_target_pct: i < 3 ? null : 10 } } }));

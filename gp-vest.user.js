@@ -1,19 +1,16 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.8.0
-// @description  Your whole Vest or MyFundedPerps profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
+// @version      1.8.1
+// @description  Your whole Vest profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
-// @match        https://myfundedperpetuals.com/*
-// @match        https://*.myfundedperpetuals.com/*
 // @run-at       document-start
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addValueChangeListener
 // @grant        unsafeWindow
 // @grant        GM_xmlhttpRequest
-// @connect      developers.myfundedperpetuals.com
 // @updateURL    https://gigaprop.xyz/gp-vest.user.js
 // @downloadURL  https://gigaprop.xyz/gp-vest.user.js
 // ==/UserScript==
