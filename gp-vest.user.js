@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.3.1
+// @version      1.3.2
 // @description  Your Vest affiliate earnings, unlock dates and payouts on one clean page. Data stays in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -67,7 +67,7 @@
     return {
       id: String(pick(x, 'id', 'withdrawal_id', 'withdrawalId', 'uuid')),
       amount: cents != null ? Number(cents) / 100 : Number(String(pick(x, 'amount', 'requested_amount', 'value') || 0).replace(/[$,]/g, '')),
-      network: String(pick(x, 'network', 'chain', 'chain_name') || ''),
+      network: String(pick(x, 'network', 'chain', 'chain_name') || ({ 42161: 'Arbitrum', 8453: 'Base', 1: 'Ethereum' })[pick(x, 'chain_id', 'chainId')] || ''),
       status: String(pick(x, 'status', 'state') || ''),
       created_at: iso(pick(x, 'created_at', 'createdAt', 'created_at_ms', 'requested_at')),
       updated_at: iso(pick(x, 'updated_at', 'updatedAt', 'executed_at', 'completed_at'))
