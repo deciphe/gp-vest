@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.5.1
+// @version      1.5.2
 // @description  Your Vest affiliate earnings, unlock dates and payouts on one clean page. Data stays in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -10,8 +10,8 @@
 // @grant        GM_setValue
 // @grant        GM_addValueChangeListener
 // @grant        unsafeWindow
-// @updateURL    https://raw.githubusercontent.com/deciphe/gp-vest/main/gp-vest.user.js
-// @downloadURL  https://raw.githubusercontent.com/deciphe/gp-vest/main/gp-vest.user.js
+// @updateURL    https://gigaprop.xyz/gp-vest.user.js
+// @downloadURL  https://gigaprop.xyz/gp-vest.user.js
 // ==/UserScript==
 
 (function () {
