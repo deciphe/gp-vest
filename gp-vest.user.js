@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.10.0
+// @version      1.10.1
 // @description  Your whole Vest profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -1038,7 +1038,8 @@ load().then(() => setTheme('mono'));
 
   // ---------- read Vest's own screens ----------
   const own = e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
-  const leaves = root => [...root.querySelectorAll('*')].filter(e => own(e) && e.offsetParent !== null);
+  const leaves = root => [...root.querySelectorAll('*')].filter(e => own(e) && e.getClientRects().length);
+  const findText = (re, root) => { const w = document.createTreeWalker(root || document.body, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) { if (re.test(n.nodeValue) && n.parentElement && n.parentElement.getClientRects().length && !n.parentElement.closest('#gp-card,#gp-float,#gp-dash,#gp-prof,#gp-gate')) return n.parentElement; } return null; };
   const byText = (t, root) => { const r = document.evaluate(`.//*[normalize-space(text())='${t}']`, root || document.body, null, 9, null).singleNodeValue; return r; };
   function rowOf(el) {
     let r = el.closest('tr,[role=row]'); if (r) return r;
@@ -1059,6 +1060,12 @@ load().then(() => setTheme('mono'));
     const px = v => isFinite(v) ? '$' + v.toLocaleString('en-US', { maximumFractionDigits: v < 10 ? 4 : 2 }) : '—';
     return { kind: 'trade', amount: pnl, tag: sym, sub: [sym, sideLev].filter(Boolean).join(' · ') || 'Vest', stats: [[isFinite(roe) ? (roe >= 0 ? '+' : '') + (roe * 100).toFixed(1) + '%' : '—', 'return on margin'], [px(open), 'entry'], [px(close), 'exit']] };
   }
+  function roughTrade(t) {
+    const lines = t.split('\n').map(x => x.trim()).filter(Boolean), sideLev = lines.find(x => /(long|short)/i.test(x)) || '', sym = lines.find(x => /^[A-Z][A-Z0-9.\-]{0,12}$/.test(x)) || '';
+    const signed = (t.replace(/[−–]/g, '-').match(/[+-]\s?\$[\d,]+(\.\d+)?/g) || []).map(num).filter(isFinite); if (!signed.length) return null;
+    const pnl = signed.sort((a, b) => Math.abs(b) - Math.abs(a))[0];
+    return { kind: 'trade', amount: pnl, tag: sym, sub: [sym, sideLev].filter(Boolean).join(' · ') || 'Vest', stats: [] };
+  }
   function readPayout(box) {
     const L = leaves(box), T = L.map(own);
     const after = re => { const i = T.findIndex(t => re.test(t)); return i >= 0 ? T[i + 1] || '' : ''; };
@@ -1076,26 +1083,42 @@ load().then(() => setTheme('mono'));
     b.onclick = e => { e.preventDefault(); e.stopPropagation(); onClick(); }; return b; };
   // remember the row behind any click (payout row, position row, share icon)
   document.addEventListener('click', e => {
-    if (e.target.closest && e.target.closest('#gp-card,#gp-dock,#gp-dash,#gp-prof,#gp-gate,[data-gp-card]')) return;
+    if (e.target.closest && e.target.closest('#gp-card,#gp-float,#gp-dock,#gp-dash,#gp-prof,#gp-gate,[data-gp-card]')) return;
     const row = rowOf(e.target); if (!row) return;
     lastRow = { at: Date.now(), text: row.innerText || '' };
     const hit = e.target.closest('button,svg,[role=button]'), txt = hit ? (hit.innerText || '').trim() : 'x';
-    if (hit && !txt && /\$[\d,]+/.test(lastRow.text) && (byText('Positions History') || byText('Open Price'))) { const d = readTrade(row); if (d) lastShare = { at: Date.now(), d, done: false }; }
+    if (hit && !txt && /\$[\d,]+/.test(lastRow.text) && findText(/positions history|open price|close price/i)) { let d = null; try { d = readTrade(row); } catch (er) {} if (!d) d = roughTrade(lastRow.text); if (d) lastShare = { at: Date.now(), d, done: false }; }
   }, true);
+  let floatFor = null;
+  function floatBtn(show, onClick) {
+    let h = document.getElementById('gp-float');
+    if (!show) { if (h) h.remove(); floatFor = null; return; }
+    if (!h) { h = document.createElement('div'); h.id = 'gp-float'; h.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:2147483646';
+      const r = h.attachShadow({ mode: 'open' }); r.innerHTML = '<style>button{display:flex;align-items:center;gap:10px;height:48px;padding:0 22px;border-radius:99px;border:1px solid rgba(241,241,243,.22);background:#0b0b0b;color:#f1f1f3;font:800 15px Manrope,system-ui,sans-serif;letter-spacing:-.01em;cursor:pointer;box-shadow:0 18px 40px -12px rgba(0,0,0,.9)}button:hover{border-color:rgba(241,241,243,.5)}b{font-weight:800}i{font-style:normal;color:#9e9ea5;font-weight:600}</style><button><b>GP.</b> card <i>flat theme</i></button>';
+      document.body.appendChild(h); }
+    h.shadowRoot.querySelector('button').onclick = e => { e.stopPropagation(); onClick(); };
+  }
   setInterval(() => {
     if (!document.body) return;
+    if (document.getElementById('gp-card')) return floatBtn(false);
     // payout certificate
-    const h = byText('Customize Your Payout Card');
-    if (h) { const claim = byText('Claim Your Card'); const anchor = claim && (claim.closest('button') || claim);
-      if (anchor && !anchor.parentElement.querySelector('[data-gp-card]')) { let box = h; while (box.parentElement && box.getBoundingClientRect().height < 300) box = box.parentElement; anchor.insertAdjacentElement('afterend', gpBtn('GP. card', () => openCard(readPayout(box)), anchor)); } }
-    // position share: put the button in Vest's share window, or open ours if none shows
-    if (lastShare && !lastShare.done) {
-      const dlg = [...document.querySelectorAll('[role=dialog],[aria-modal=true]')].filter(x => x.offsetParent !== null || getComputedStyle(x).position === 'fixed').pop();
-      if (dlg && !dlg.querySelector('[data-gp-card]') && !byText('Customize Your Payout Card', dlg)) { const d = lastShare.d; const bs = [...dlg.querySelectorAll('button')].filter(b => b.offsetParent !== null && (b.innerText || '').trim()); const last = bs[bs.length - 1];
-        const btn = gpBtn('GP. card', () => openCard(d), last); (last ? last.parentElement : dlg).appendChild(btn); lastShare.done = true; }
-      else if (Date.now() - lastShare.at > 1600) { lastShare.done = true; if (!document.getElementById('gp-card')) openCard(lastShare.d); }
+    const h = findText(/customize your payout card|official payout certificate/i);
+    if (h) {
+      let box = h; while (box.parentElement && box.getBoundingClientRect().height < 320) box = box.parentElement;
+      const go = () => openCard(readPayout(box));
+      const claim = findText(/^\s*claim your card\s*$/i, box) || findText(/^\s*claim your card\s*$/i); const anchor = claim && (claim.closest('button') || claim);
+      if (anchor && !anchor.parentElement.querySelector('[data-gp-card]')) { try { anchor.insertAdjacentElement('afterend', gpBtn('GP. card', go, anchor)); } catch (e) {} }
+      floatFor = 'pay'; return floatBtn(true, go);
     }
-  }, 500);
+    // position share
+    if (lastShare && Date.now() - lastShare.at < 12000) {
+      const d = lastShare.d;
+      const dlg = [...document.querySelectorAll('[role=dialog],[aria-modal=true]')].filter(x => x.getClientRects().length).pop();
+      if (dlg && !dlg.querySelector('[data-gp-card]')) { const bs = [...dlg.querySelectorAll('button')].filter(b => b.getClientRects().length && (b.innerText || '').trim()); const last = bs[bs.length - 1]; try { (last ? last.parentElement : dlg).appendChild(gpBtn('GP. card', () => openCard(d), last)); } catch (e) {} }
+      floatFor = 'trade'; return floatBtn(true, () => { lastShare = null; openCard(d); });
+    }
+    if (floatFor) floatBtn(false);
+  }, 400);
 
   // ---------- GP. button on Affiliates and Portfolio ----------
   const sleep = ms => new Promise(r => setTimeout(r, ms));
