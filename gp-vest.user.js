@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.9.2
+// @version      1.10.0
 // @description  Your whole Vest profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -914,6 +914,188 @@ load().then(() => setTheme('mono'));
 
 
   }
+
+  // ---------- GP. share cards: payout certificate + position share, flat theme ----------
+  const CARD_L = {
+    land: { W: 2400, H: 1600, pad: 150, wmY: 210, wm: 76, bigY: 770, big: 330, maxW: 1500, nameY: 945, name: 96, subY: 1045, sub: 58, stY: 1380, st: 64, slY: 1455, sl: 42, gap: 520, moon: [2520, 1900, 1420, 15], mark: [400, 170, 150], photo: [1050, 1] },
+    sq: { W: 2000, H: 2000, pad: 160, wmY: 225, wm: 72, bigY: 930, big: 300, maxW: 1680, nameY: 1105, name: 92, subY: 1200, sub: 56, stY: 1650, st: 62, slY: 1725, sl: 40, gap: 470, moon: [2150, 2500, 1250, 16], mark: [300, 150, 150], photo: [900, .55] },
+    tall: { W: 1600, H: 2000, pad: 130, wmY: 200, wm: 64, bigY: 880, big: 250, maxW: 1340, nameY: 1050, name: 84, subY: 1140, sub: 50, stY: 1640, st: 56, slY: 1712, sl: 36, gap: 420, moon: [1750, 2450, 1150, 14], mark: [250, 120, 120], photo: [700, .55] }
+  };
+  const cardSet = Object.assign({ name: '', brand: 'GIGAPROP.', layout: 'land', compact: false, photo: '' }, GM_getValue('cardSet', {}) || {});
+  const saveSet = () => { try { GM_setValue('cardSet', cardSet); } catch (e) { cardSet.photo = ''; GM_setValue('cardSet', cardSet); } };
+  const usdFull = v => (v < 0 ? '−$' : '+$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const usdShort = v => { const a = Math.abs(v), s = v < 0 ? '−$' : '+$'; return a >= 1e6 ? s + (a / 1e6).toFixed(2) + 'M' : a >= 1e3 ? s + (a / 1e3).toFixed(2) + 'K' : s + a.toFixed(2); };
+  const num = t => { const m = String(t || '').replace(/[−–]/g, '-').match(/(-?)\+?\$?\s*(-?)([\d,]*\.?\d+)\s*([kKmM]?)/); if (!m) return NaN; let v = parseFloat(m[3].replace(/,/g, '')); if (/k/i.test(m[4])) v *= 1e3; if (/m/i.test(m[4])) v *= 1e6; return (m[1] || m[2]) ? -v : v; };
+  let markImg = null;
+  function vestMarkImg() {
+    if (markImg) return markImg;
+    markImg = new Image(); markImg.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(VEST_SVG.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" '));
+    return markImg;
+  }
+  function drawCard(c, d, set) {
+    const L = CARD_L[set.layout] || CARD_L.land, W = c.width = L.W, H = c.height = L.H, x = c.getContext('2d');
+    const F = (w, s, it) => (it ? 'italic ' : '') + w + ' ' + s + 'px Manrope, "Inter Display", system-ui, sans-serif';
+    x.fillStyle = '#0b0b0b'; x.fillRect(0, 0, W, H);
+    // photo, greyscale, fading in from the left
+    if (set.photo && d.img && d.img.complete && d.img.naturalWidth) {
+      const x0 = L.photo[0], pw = W - x0, im = d.img, s = Math.max(pw / im.naturalWidth, H / im.naturalHeight), iw = im.naturalWidth * s, ih = im.naturalHeight * s;
+      const o = document.createElement('canvas'); o.width = pw; o.height = H; const ox = o.getContext('2d');
+      ox.filter = 'grayscale(1) contrast(1.12) brightness(.82)'; ox.drawImage(im, (pw - iw) / 2, (H - ih) / 2, iw, ih); ox.filter = 'none';
+      ox.globalCompositeOperation = 'destination-in'; const g = ox.createLinearGradient(0, 0, pw * .45, 0); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)'); ox.fillStyle = g; ox.fillRect(0, 0, pw, H);
+      const g2 = ox.createLinearGradient(0, H * .7, 0, H); g2.addColorStop(0, 'rgba(0,0,0,1)'); g2.addColorStop(1, 'rgba(0,0,0,.25)'); ox.fillStyle = g2; ox.fillRect(0, H * .7, pw, H * .3);
+      x.globalAlpha = L.photo[1]; x.drawImage(o, x0, 0); x.globalAlpha = 1;
+    }
+    // halftone moon from the bottom-right, sparse at the edges
+    const [cx, cy, R, st] = L.moon, hh = (a, b) => { const v = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return v - Math.floor(v); };
+    for (let j = 0; ; j++) { const py = j * st * .866; if (py > H + st) break;
+      for (let px = j % 2 ? st / 2 : 0; px < W + st; px += st) {
+        const dx = (px - cx) / R, dy = (py - cy) / R, d2 = dx * dx + dy * dy; if (d2 >= 1) continue;
+        let l = Math.max(0, dx * -.5 + dy * -.55 + Math.sqrt(1 - d2) * .67) * (.85 + .15 * hh(Math.floor(px / 90), Math.floor(py / 90)));
+        const edge = Math.min(1, Math.max(0, (1 - Math.sqrt(d2)) / .4)), a = (.05 + .3 * l) * (.3 + .7 * edge), r = st * .26 * (.4 + .6 * l) * (.55 + .45 * edge);
+        if (a < .02 || r < .4) continue; x.fillStyle = `rgba(226,226,232,${a.toFixed(3)})`; x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
+      } }
+    // Vest mark
+    const mk = vestMarkImg(); if (mk.complete && mk.naturalWidth) { const [mw, mr, mb] = L.mark, mh = mw * 340 / 549; x.globalAlpha = .9; x.drawImage(mk, W - mr - mw, H - mb - mh, mw, mh); x.globalAlpha = 1; }
+    // type
+    const P = L.pad, fit = (t, w, s, max) => { x.font = F(w, s); while (s > 20 && x.measureText(t).width > max) { s -= 4; x.font = F(w, s); } return s; };
+    x.textBaseline = 'alphabetic'; x.letterSpacing = '0px';
+    x.fillStyle = '#eeeae2'; x.font = F(800, L.wm); try { x.letterSpacing = (-.045 * L.wm) + 'px'; } catch (e) {}
+    const brand = (set.brand || 'GIGAPROP.').toUpperCase(); x.fillText(brand, P, L.wmY); const bw = x.measureText(brand).width;
+    if (d.tag) { x.font = F(700, L.wm * .34); try { x.letterSpacing = (L.wm * .34 * .32) + 'px'; } catch (e) {} x.fillStyle = '#9e9ea5'; x.fillText(d.tag.toUpperCase(), P + bw + L.wm * .45, L.wmY); }
+    const big = set.compact ? usdShort(d.amount) : usdFull(d.amount);
+    const bs = fit(big, 800, L.big, L.maxW); try { x.letterSpacing = (-.055 * bs) + 'px'; } catch (e) {}
+    x.fillStyle = d.amount < 0 ? '#e8988c' : '#e6e3dc'; x.font = F(800, bs); x.fillText(big, P - bs * .02, L.bigY);
+    try { x.letterSpacing = (-.02 * L.name) + 'px'; } catch (e) {}
+    let y = L.nameY;
+    if (set.name) { const nm = set.name.startsWith('@') || /\s/.test(set.name) ? set.name : '@' + set.name; x.fillStyle = '#d9d9de'; x.font = F(700, fit(nm, 700, L.name, L.maxW)); x.fillText(nm, P, y); } else y -= L.name * .9;
+    if (d.sub) { try { x.letterSpacing = '0px'; } catch (e) {} x.fillStyle = '#a7a7ae'; x.font = F(500, fit(d.sub, 500, L.sub, L.maxW), 1); x.fillText(d.sub, P, y + (L.subY - L.nameY)); }
+    (d.stats || []).slice(0, 3).forEach(([v, lab], i) => {
+      const sx = P + i * L.gap; try { x.letterSpacing = (-.02 * L.st) + 'px'; } catch (e) {}
+      x.fillStyle = '#eeeae2'; x.font = F(800, fit(v, 800, L.st, L.gap - 40)); x.fillText(v, sx, L.stY);
+      try { x.letterSpacing = '0px'; } catch (e) {} x.fillStyle = '#9e9ea5'; x.font = F(600, L.sl); x.fillText(lab, sx, L.slY);
+    });
+  }
+  const CCSS = `:host{all:initial}
+  .o{position:fixed;inset:0;z-index:2147483647;background:rgba(5,5,6,.86);display:grid;place-items:center;font-family:Manrope,system-ui,sans-serif;color:#f1f1f3;-webkit-font-smoothing:antialiased;overflow:auto;padding:16px;box-sizing:border-box}
+  .p{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:28px;width:min(1180px,100%);background:#0f0f0f;border:1px solid rgba(241,241,243,.09);border-radius:24px;padding:24px;box-sizing:border-box}
+  .pv{display:grid;place-items:center;background:#0b0b0b;border-radius:16px;min-height:300px;overflow:hidden}
+  canvas{display:block;max-width:100%;max-height:72vh;width:auto;height:auto;border-radius:10px}
+  .c{display:flex;flex-direction:column;gap:18px;min-width:0}
+  .h{display:flex;justify-content:space-between;align-items:center}
+  .h b{font-size:20px;font-weight:800;letter-spacing:-.04em}.h b span{margin-left:10px;font-size:11px;letter-spacing:.3em;font-weight:700;color:#9e9ea5}
+  .x{width:34px;height:34px;border-radius:99px;border:1px solid rgba(241,241,243,.12);background:none;color:#9e9ea5;cursor:pointer;font-size:13px}
+  label{display:flex;flex-direction:column;gap:7px;font-size:13px;font-weight:600;color:#9e9ea5}
+  input[type=text]{height:42px;border-radius:12px;border:1px solid rgba(241,241,243,.12);background:#0b0b0b;color:#f1f1f3;padding:0 14px;font:600 15px Manrope,system-ui,sans-serif;outline:none}
+  input[type=text]:focus{border-color:rgba(241,241,243,.35)}
+  .seg{display:flex;gap:3px;padding:3px;border-radius:99px;border:1px solid rgba(241,241,243,.1)}
+  .seg button{flex:1;border:0;background:none;color:#9e9ea5;font:700 12.5px Manrope,system-ui,sans-serif;padding:8px 6px;border-radius:99px;cursor:pointer}
+  .seg button.on{background:#e8e8ec;color:#0b0b0b}
+  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:14px;font-weight:600}
+  .tg{position:relative;width:44px;height:26px;border-radius:99px;border:0;background:rgba(241,241,243,.14);cursor:pointer;flex:none}
+  .tg:after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:99px;background:#9e9ea5;transition:transform .2s}
+  .tg.on{background:#e8e8ec}.tg.on:after{transform:translateX(18px);background:#0b0b0b}
+  .lnk{border:0;background:none;color:#e8e8ec;font:700 13px Manrope,system-ui,sans-serif;cursor:pointer;padding:0}
+  .go{margin-top:auto;display:flex;flex-direction:column;gap:10px}
+  .b1,.b2{height:46px;border-radius:99px;font:800 14px Manrope,system-ui,sans-serif;cursor:pointer}
+  .b1{border:0;background:#e8e8ec;color:#0b0b0b}.b2{border:1px solid rgba(241,241,243,.16);background:none;color:#f1f1f3}
+  .msg{min-height:16px;font-size:12px;font-weight:600;color:#9fd7b2;text-align:center}
+  @media (max-width:820px){.p{grid-template-columns:1fr;padding:16px}canvas{max-height:46vh}}`;
+  function closeCard() { const h = document.getElementById('gp-card'); if (h) h.remove(); }
+  function openCard(d) {
+    closeCard(); fonts();
+    const HOST = document.createElement('div'); HOST.id = 'gp-card'; const R = HOST.attachShadow({ mode: 'open' });
+    R.innerHTML = `<style>${CCSS}</style><div class="o"><div class="p">
+      <div class="pv"><canvas></canvas></div>
+      <div class="c">
+        <div class="h"><b>GIGAPROP.<span>CARD</span></b><button class="x" aria-label="Close">✕</button></div>
+        <label>Name on the card<input type="text" data-k="name" maxlength="28" placeholder="@yourhandle"></label>
+        <label>Wordmark<input type="text" data-k="brand" maxlength="16"></label>
+        <label>Layout<div class="seg"><button data-v="land">Landscape</button><button data-v="sq">Square</button><button data-v="tall">Vertical</button></div></label>
+        <div class="row"><span>Short number</span><button class="tg" data-t="compact" aria-label="Short number"></button></div>
+        <div class="row"><span>Photo</span><span><button class="lnk" data-a="pick">Add photo</button> <button class="lnk" data-a="rm" hidden>· Remove</button></span></div>
+        <input type="file" accept="image/*" hidden>
+        <div class="go"><button class="b1" data-a="dl">Download PNG</button><button class="b2" data-a="cp">Copy image</button><div class="msg"></div></div>
+      </div></div></div>`;
+    document.documentElement.appendChild(HOST);
+    const cv = R.querySelector('canvas'), msg = R.querySelector('.msg'), file = R.querySelector('input[type=file]');
+    const img = new Image(); d.img = img;
+    const draw = () => { R.querySelectorAll('.seg button').forEach(b => b.classList.toggle('on', b.dataset.v === cardSet.layout)); R.querySelector('[data-t=compact]').classList.toggle('on', !!cardSet.compact); R.querySelector('[data-a=rm]').hidden = !cardSet.photo; R.querySelector('[data-a=pick]').textContent = cardSet.photo ? 'Change photo' : 'Add photo'; drawCard(cv, d, cardSet); };
+    img.onload = draw; if (cardSet.photo) img.src = cardSet.photo;
+    vestMarkImg().addEventListener('load', draw);
+    R.querySelectorAll('input[type=text]').forEach(i => { i.value = cardSet[i.dataset.k] || ''; i.oninput = () => { cardSet[i.dataset.k] = i.value; saveSet(); draw(); }; });
+    R.querySelector('.seg').onclick = e => { const b = e.target.closest('button'); if (!b) return; cardSet.layout = b.dataset.v; saveSet(); draw(); };
+    R.querySelector('[data-t=compact]').onclick = () => { cardSet.compact = !cardSet.compact; saveSet(); draw(); };
+    R.querySelector('[data-a=pick]').onclick = () => file.click();
+    R.querySelector('[data-a=rm]').onclick = () => { cardSet.photo = ''; saveSet(); img.removeAttribute('src'); draw(); };
+    file.onchange = () => { const f = file.files[0]; if (!f) return; const rd = new FileReader(); rd.onload = () => { const t = new Image(); t.onload = () => { const k = Math.min(1, 1200 / Math.max(t.width, t.height)), o = document.createElement('canvas'); o.width = t.width * k; o.height = t.height * k; o.getContext('2d').drawImage(t, 0, 0, o.width, o.height); cardSet.photo = o.toDataURL('image/jpeg', .86); saveSet(); img.src = cardSet.photo; }; t.src = rd.result; }; rd.readAsDataURL(f); };
+    const fname = () => 'gp-' + (d.kind === 'trade' ? 'trade' : 'payout') + '-' + new Date().toISOString().slice(0, 10) + '.png';
+    R.querySelector('[data-a=dl]').onclick = () => cv.toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fname(); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000); msg.textContent = 'Saved'; });
+    R.querySelector('[data-a=cp]').onclick = () => cv.toBlob(async b => { try { await navigator.clipboard.write([new W.ClipboardItem({ 'image/png': b })]); msg.textContent = 'Copied, paste it into your post'; } catch (e) { msg.textContent = 'Copy blocked here, use Download'; } });
+    R.querySelector('.x').onclick = closeCard; R.querySelector('.o').onclick = e => { if (e.target.classList.contains('o')) closeCard(); };
+    draw(); (document.fonts ? Promise.all(['800 100px Manrope', '700 100px Manrope', '600 100px Manrope', '500 100px Manrope'].map(f => document.fonts.load(f))) : Promise.resolve()).then(draw, draw);
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeCard(); });
+
+  // ---------- read Vest's own screens ----------
+  const own = e => [...e.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join('').trim();
+  const leaves = root => [...root.querySelectorAll('*')].filter(e => own(e) && e.offsetParent !== null);
+  const byText = (t, root) => { const r = document.evaluate(`.//*[normalize-space(text())='${t}']`, root || document.body, null, 9, null).singleNodeValue; return r; };
+  function rowOf(el) {
+    let r = el.closest('tr,[role=row]'); if (r) return r;
+    for (let e = el; e && e !== document.body; e = e.parentElement) { const b = e.getBoundingClientRect(); if (b.width > 520 && b.height < 140 && b.height > 12) return e; }
+    return null;
+  }
+  let lastRow = null, lastShare = null;
+  function readTrade(row) {
+    const hd = byText('Open Price') || byText('Entry Price'); if (!hd) return null;
+    const hrow = rowOf(hd); if (!hrow || hrow === row) return null;
+    const heads = leaves(hrow).map(e => ({ t: own(e), b: e.getBoundingClientRect() })).sort((a, b) => a.b.left - b.b.left);
+    const col = {}; leaves(row).forEach(e => { const b = e.getBoundingClientRect(), mid = b.left + b.width / 2; let h = heads[0]; heads.forEach(q => { if (q.b.left - 24 <= mid) h = q; }); if (!h) return; (col[h.t] = col[h.t] || []).push(own(e)); });
+    const g = k => { const key = Object.keys(col).find(c => new RegExp(k, 'i').test(c)); return key ? col[key] : []; };
+    const mkt = g('^market|symbol'), sideLev = mkt.find(t => /(long|short)/i.test(t)) || '', sym = mkt.find(t => !/(long|short)/i.test(t) && /[A-Z]/.test(t) && t.length <= 14) || '';
+    const pnl = num((g('pnl')[0] || '')), open = num(g('open price|entry')[0]), close = num(g('close price|exit')[0]), size = Math.abs(num(g('^size')[0])), lev = parseFloat((sideLev.match(/(\d+(\.\d+)?)\s*x/i) || [])[1]);
+    if (!isFinite(pnl)) return null;
+    const roe = open && size && lev ? pnl / (size * open / lev) : NaN;
+    const px = v => isFinite(v) ? '$' + v.toLocaleString('en-US', { maximumFractionDigits: v < 10 ? 4 : 2 }) : '—';
+    return { kind: 'trade', amount: pnl, tag: sym, sub: [sym, sideLev].filter(Boolean).join(' · ') || 'Vest', stats: [[isFinite(roe) ? (roe >= 0 ? '+' : '') + (roe * 100).toFixed(1) + '%' : '—', 'return on margin'], [px(open), 'entry'], [px(close), 'exit']] };
+  }
+  function readPayout(box) {
+    const L = leaves(box), T = L.map(own);
+    const after = re => { const i = T.findIndex(t => re.test(t)); return i >= 0 ? T[i + 1] || '' : ''; };
+    const amtEl = L.filter(e => /^[+−-]?\$[\d.,]+\s*[kKmM]?$/.test(own(e))).sort((a, b) => parseFloat(getComputedStyle(b).fontSize) - parseFloat(getComputedStyle(a).fontSize))[0];
+    let amount = amtEl ? num(own(amtEl)) : NaN;
+    if (lastRow && Date.now() - lastRow.at < 20000 && isFinite(amount)) { const c = (lastRow.text.match(/\$[\d,]+\.\d{2}/g) || []).map(num).filter(v => Math.abs(v - amount) <= Math.max(10, amount * .006)); if (c.length) amount = c.sort((a, b) => Math.abs(a - amount) - Math.abs(b - amount))[0]; }
+    const size = after(/^account size$/i), date = after(/^date$/i), tier = after(/^account tier$/i);
+    const nameIn = box.querySelector('input[type=text],input:not([type])'); if (nameIn && nameIn.value && !cardSet.name) { cardSet.name = nameIn.value; saveSet(); }
+    const dt = date ? new Date(date) : new Date(), ds = isNaN(dt) ? date : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const stats = []; if (size) stats.push([size, 'account size']); if (tier) stats.push([tier.charAt(0) + tier.slice(1).toLowerCase(), 'tier']); stats.push([ds, 'paid']);
+    return { kind: 'payout', amount: isFinite(amount) ? Math.abs(amount) : 0, tag: 'PAYOUT', sub: 'Vest payout' + (size ? ' · ' + size + ' account' : ''), stats };
+  }
+  const gpBtn = (label, onClick, like) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.gpCard = '1'; b.textContent = label;
+    b.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;height:' + (like ? Math.max(40, like.getBoundingClientRect().height) : 44) + 'px;border-radius:6px;border:1px solid rgba(241,241,243,.25);background:#0b0b0b;color:#f1f1f3;font:800 14px Manrope,system-ui,sans-serif;letter-spacing:-.01em;cursor:pointer';
+    b.onclick = e => { e.preventDefault(); e.stopPropagation(); onClick(); }; return b; };
+  // remember the row behind any click (payout row, position row, share icon)
+  document.addEventListener('click', e => {
+    if (e.target.closest && e.target.closest('#gp-card,#gp-dock,#gp-dash,#gp-prof,#gp-gate,[data-gp-card]')) return;
+    const row = rowOf(e.target); if (!row) return;
+    lastRow = { at: Date.now(), text: row.innerText || '' };
+    const hit = e.target.closest('button,svg,[role=button]'), txt = hit ? (hit.innerText || '').trim() : 'x';
+    if (hit && !txt && /\$[\d,]+/.test(lastRow.text) && (byText('Positions History') || byText('Open Price'))) { const d = readTrade(row); if (d) lastShare = { at: Date.now(), d, done: false }; }
+  }, true);
+  setInterval(() => {
+    if (!document.body) return;
+    // payout certificate
+    const h = byText('Customize Your Payout Card');
+    if (h) { const claim = byText('Claim Your Card'); const anchor = claim && (claim.closest('button') || claim);
+      if (anchor && !anchor.parentElement.querySelector('[data-gp-card]')) { let box = h; while (box.parentElement && box.getBoundingClientRect().height < 300) box = box.parentElement; anchor.insertAdjacentElement('afterend', gpBtn('GP. card', () => openCard(readPayout(box)), anchor)); } }
+    // position share: put the button in Vest's share window, or open ours if none shows
+    if (lastShare && !lastShare.done) {
+      const dlg = [...document.querySelectorAll('[role=dialog],[aria-modal=true]')].filter(x => x.offsetParent !== null || getComputedStyle(x).position === 'fixed').pop();
+      if (dlg && !dlg.querySelector('[data-gp-card]') && !byText('Customize Your Payout Card', dlg)) { const d = lastShare.d; const bs = [...dlg.querySelectorAll('button')].filter(b => b.offsetParent !== null && (b.innerText || '').trim()); const last = bs[bs.length - 1];
+        const btn = gpBtn('GP. card', () => openCard(d), last); (last ? last.parentElement : dlg).appendChild(btn); lastShare.done = true; }
+      else if (Date.now() - lastShare.at > 1600) { lastShare.done = true; if (!document.getElementById('gp-card')) openCard(lastShare.d); }
+    }
+  }, 500);
 
   // ---------- GP. button on Affiliates and Portfolio ----------
   const sleep = ms => new Promise(r => setTimeout(r, ms));
