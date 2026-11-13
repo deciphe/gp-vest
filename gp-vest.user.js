@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.9.0
+// @version      1.9.1
 // @description  Your whole Vest profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -911,10 +911,10 @@ load().then(S => setTheme(S.theme || 'cream'));
   const clickText = t => { const b = [...document.querySelectorAll('button,[role=tab]')].find(x => x.textContent.trim() === t); if (b) b.click(); return !!b; };
   function gpButton() {
     if (W.top !== W.self) return;
-    let host = document.getElementById('gp-btn');
+    let host = document.getElementById('gp-dock');
     if (host || !document.body) return;
     fonts();
-    host = document.createElement('div'); host.id = 'gp-btn';
+    host = document.createElement('div'); host.id = 'gp-dock';
     const pos = GM_getValue('btnPos', null) || { side: 'right', y: 0.5 };
     const place = () => { host.style.cssText = `position:fixed;z-index:2147483646;top:${Math.round(pos.y * 100)}%;transform:translateY(-50%);${pos.side}:10px`; host.dataset.side = pos.side; };
     place();

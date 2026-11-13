@@ -29,7 +29,7 @@ const audit = fs.readFileSync(path.join(__dirname, 'audit-fn.js'), 'utf8');
     await ctx.route('https://fonts.googleapis.com/**', r => r.fulfill({ contentType: 'text/css', body: '' }));
     await ctx.addInitScript(`window.__s=${JSON.stringify(S)};window.GM_getValue=(k,d)=>k in window.__s?window.__s[k]:d;window.GM_setValue=(k,v)=>{window.__s[k]=v};window.unsafeWindow=window;` + US);
     await p.goto('https://next.vestmarkets.com/trade'); await p.waitForTimeout(1500);
-    await p.click('#gp-btn >> button'); await p.waitForTimeout(500);
+    await p.click('#gp-dock >> button'); await p.waitForTimeout(500);
     if (!(await p.$('#gp-gate'))) r0.push('gate did not open');
     if (view !== 'gate') { await p.click('#gp-gate >> [data-go=' + (view === 'profile' ? 'prof' : 'earn') + ']'); await p.waitForTimeout(1200); }
     if (!(await p.$({ gate: '#gp-gate', profile: '#gp-prof', dashboard: '#gp-dash' }[view]))) r0.push(view + ' did not open');
