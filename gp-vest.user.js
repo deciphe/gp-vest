@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GP. Dashboard for Vest
 // @namespace    https://github.com/deciphe/gp-vest
-// @version      1.10.1
+// @version      1.11.0
 // @description  Your whole Vest profile: every account, every trade, what you spent and what you got paid. Plus affiliate earnings. Runs in your browser.
 // @author       GP.
 // @match        https://next.vestmarkets.com/*
@@ -703,7 +703,7 @@ ${P}#moon,${P}#moon2,${P}.duo #moon,${P}.duo #moon2,${P}.moon{opacity:.42;-webki
   .d{position:relative;display:block;padding:0;border:0;background:none;cursor:pointer;text-align:left;color:inherit;font:inherit}
   .d+.d{padding-top:clamp(18px,4vh,44px);border-top:1px solid var(--line)}
   .d small{display:block;font-size:15px;font-weight:600;color:var(--mute)}
-  .d b{display:inline-flex;align-items:flex-start;gap:.12em;margin-top:6px;font-size:clamp(68px,10vw,148px);font-weight:800;letter-spacing:-.065em;line-height:.86;color:var(--c);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+  .d b{display:inline-flex;align-items:flex-start;gap:.12em;margin-top:6px;font-size:clamp(54px,min(8.5vw,11vh),128px);font-weight:800;letter-spacing:-.065em;line-height:.86;color:var(--c);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
   .d b em{font-style:normal;font-size:.28em;font-weight:700;letter-spacing:0;color:var(--mute);margin-top:.18em;transition:transform .35s cubic-bezier(.2,.8,.2,1),color .2s}
   .d span{display:block;margin-top:clamp(12px,1.6vh,18px);font-size:clamp(17px,1.5vw,22px);font-weight:600;color:var(--mute);font-variant-numeric:tabular-nums;min-height:1.2em}
   .d span strong{font-weight:800;color:var(--fg)}
@@ -721,6 +721,7 @@ ${P}#moon,${P}#moon2,${P}.duo #moon,${P}.duo #moon2,${P}.moon{opacity:.42;-webki
     const earn = an && an.totals ? '<strong>' + money(an.totals.net_cents / 100) + '</strong> earned' : 'affiliate earnings and payouts';
     let prof = 'every account, every trade';
     if (pr && pr.payouts) { const spent = pr.accounts.reduce((s, a) => s + (a.cost || 0), 0), paid = pr.payouts.filter(p => !/fail|reject|cancel/i.test(p.status)).reduce((s, p) => s + p.amt, 0); prof = '<strong>' + (paid - spent >= 0 ? '+' : '') + money(paid - spent) + '</strong> real PnL'; }
+    const wins = pr && pr.trades ? '<strong>' + (pr.payouts || []).filter(p => !/fail|reject|cancel/i.test(p.status)).length + '</strong> payouts · <strong>' + pr.trades.filter(t => t.pnl > 0).length + '</strong> wins to share' : 'share-ready cards of your wins';
     const HOST = document.createElement('div'); HOST.id = 'gp-gate';
     const R = HOST.attachShadow({ mode: 'open' });
     R.innerHTML = `<style>${GCSS}</style><div class="g" data-theme="${mono ? 'mono' : 'cream'}" style="--c:${V.c}">
@@ -729,11 +730,12 @@ ${P}#moon,${P}#moon2,${P}.duo #moon,${P}.duo #moon2,${P}.moon{opacity:.42;-webki
       <div class="doors">
         <button class="d" data-go="earn"><small>affiliate · payouts</small><b>Earnings<em>↗</em></b><span>${earn}</span></button>
         <button class="d" data-go="prof"><small>accounts · trades</small><b>Profile<em>↗</em></b><span>${prof}</span></button>
+        <button class="d" data-go="wins"><small>payouts · winning trades</small><b>Cards<em>↗</em></b><span>${wins}</span></button>
       </div></div>`;
     document.documentElement.appendChild(HOST); document.documentElement.style.overflow = 'hidden';
     const sky = R.querySelector('.sky'), dp = devicePixelRatio || 1; sky.width = innerWidth * dp; sky.height = innerHeight * dp; flatField(sky, V.rgb);
     R.querySelector('.x').onclick = closeGate;
-    R.querySelectorAll('.d').forEach(d => d.onclick = () => { closeGate(); d.dataset.go === 'prof' ? openProfile() : openDash('aff'); });
+    R.querySelectorAll('.d').forEach(d => d.onclick = () => { closeGate(); d.dataset.go === 'prof' ? openProfile() : d.dataset.go === 'wins' ? openWins() : openDash('aff'); });
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGate(); });
 
@@ -915,6 +917,60 @@ load().then(() => setTheme('mono'));
 
   }
 
+
+  // ---------- Cards: recent payouts and winning trades, one tap to a GP. card ----------
+  const WCSS = `:host{all:initial}
+  .w{position:fixed;inset:0;z-index:2147483647;background:#0b0b0b;color:#f1f1f3;font-family:Manrope,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow:auto;padding:clamp(20px,4vh,44px) clamp(16px,5vw,80px) 64px;box-sizing:border-box}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .brand{display:flex;align-items:baseline;gap:12px;font-size:clamp(24px,2.4vw,34px);font-weight:800;letter-spacing:-.045em}.brand span{font-size:11px;letter-spacing:.32em;font-weight:700;color:#9e9ea5}
+  .hr{display:flex;gap:10px;align-items:center}
+  .btn{height:36px;padding:0 14px;border-radius:99px;border:1px solid rgba(241,241,243,.12);background:none;color:#f1f1f3;font:700 12.5px Manrope,system-ui,sans-serif;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:rgba(241,241,243,.32)}.btn:disabled{opacity:.5}
+  h2{margin:40px 0 14px;font-size:15px;font-weight:600;color:#9e9ea5;display:flex;gap:10px;align-items:baseline}h2 b{color:#f1f1f3;font-weight:800}
+  .g{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .t{position:relative;text-align:left;padding:20px;border-radius:18px;border:1px solid rgba(241,241,243,.08);background:#0f0f0f;color:inherit;font:inherit;cursor:pointer;transition:border-color .2s,transform .2s}
+  .t:hover{border-color:rgba(241,241,243,.3);transform:translateY(-2px)}
+  .t small{display:block;padding-right:22px;font-size:12.5px;font-weight:600;color:#9e9ea5}
+  .t b{display:block;margin-top:10px;font-size:34px;font-weight:800;letter-spacing:-.05em;color:#e6e3dc;font-variant-numeric:tabular-nums}
+  .t span{display:block;margin-top:6px;font-size:13px;font-weight:600;color:#9e9ea5;font-style:italic}
+  .t em{position:absolute;top:18px;right:18px;font-style:normal;font-size:14px;color:#9e9ea5}
+  .t:hover em{color:#f1f1f3}
+  .e{margin-top:60px;font-size:18px;font-weight:700;color:#9e9ea5}
+  .prog{font-size:12.5px;font-weight:600;color:#9e9ea5}`;
+  function closeWins() { const h = document.getElementById('gp-wins'); if (h) h.remove(); document.documentElement.style.overflow = ''; }
+  function openWins() {
+    closeWins(); closeGate(); closeDash(); closeProfile(); fonts();
+    const pr = GM_getValue('profile', null);
+    const HOST = document.createElement('div'); HOST.id = 'gp-wins'; HOST.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:auto'; const R = HOST.attachShadow({ mode: 'open' });
+    const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const day = t => new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const sz = v => !v ? '' : v >= 1000 ? '$' + (v / 1000) + 'K' : '$' + v;
+    const px = v => isFinite(v) && v ? '$' + (+v).toLocaleString('en-US', { maximumFractionDigits: v < 10 ? 4 : 2 }) : '—';
+    const A = {}; (pr && pr.accounts || []).forEach(a => { A[a.id] = a; });
+    const pays = (pr && pr.payouts || []).filter(p => p.amt > 0 && !/fail|reject|cancel/i.test(p.status)).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 40).map(p => {
+      const a = A[p.acct] || {}, size = a.size ? '$' + a.size.toLocaleString('en-US') : '';
+      return { kind: 'payout', amount: p.amt, tag: 'PAYOUT', when: p.at, list: [day(p.at), sz(a.size) + (a.plan ? ' ' + a.plan : '')].filter(Boolean).join(' · '), sub: 'Vest payout' + (size ? ' · ' + size + ' account' : ''), stats: [size ? [size, 'account size'] : null, [day(p.at), 'paid']].filter(Boolean) };
+    });
+    const wins = (pr && pr.trades || []).filter(t => t.pnl > 0).sort((a, b) => b.t1 - a.t1).slice(0, 60).map(t => {
+      const side = t.side ? t.side.charAt(0).toUpperCase() + t.side.slice(1).toLowerCase() : '', lev = t.lev ? Math.round(t.lev) + 'x' : '', roe = t.open && t.qty && t.lev ? t.pnl / (Math.abs(t.qty) * t.open / t.lev) : NaN;
+      return { kind: 'trade', amount: t.pnl, tag: t.sym, when: t.t1, list: day(t.t1) + ' · ' + t.sym, sub: [t.sym, (side + ' ' + lev).trim()].filter(Boolean).join(' · '), stats: [[isFinite(roe) ? '+' + (roe * 100).toFixed(1) + '%' : '—', 'return on margin'], [px(t.open), 'entry'], [px(t.close), 'exit']] };
+    });
+    const tile = (d, i, k) => `<button class="t" data-k="${k}" data-i="${i}"><em>↗</em><small>${esc(d.list)}</small><b>+$${d.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b><span>${esc(d.sub)}</span></button>`;
+    R.innerHTML = `<style>${WCSS}</style><div class="w">
+      <div class="top"><div class="brand">GIGAPROP.<span>CARDS</span></div><div class="hr"><span class="prog"></span><button class="btn" data-a="rf">Refresh</button><button class="btn" data-a="menu">← Menu</button><button class="btn" data-a="x" aria-label="Close">✕</button></div></div>
+      ${pays.length ? `<h2><b>Payouts</b>${pays.length} most recent</h2><div class="g">${pays.map((d, i) => tile(d, i, 'p')).join('')}</div>` : ''}
+      ${wins.length ? `<h2><b>Winning trades</b>${wins.length} most recent</h2><div class="g">${wins.map((d, i) => tile(d, i, 'w')).join('')}</div>` : ''}
+      ${!pays.length && !wins.length ? '<div class="e">No wins loaded yet. Press Refresh to pull your payouts and trades.</div>' : ''}
+    </div>`;
+    document.documentElement.appendChild(HOST); document.documentElement.style.overflow = 'hidden';
+    R.querySelectorAll('.t').forEach(b => b.onclick = () => openCard((b.dataset.k === 'p' ? pays : wins)[+b.dataset.i]));
+    R.querySelector('[data-a=x]').onclick = closeWins;
+    R.querySelector('[data-a=menu]').onclick = () => { closeWins(); openGate(); };
+    const rf = R.querySelector('[data-a=rf]'), prog = R.querySelector('.prog');
+    rf.onclick = async () => { rf.disabled = true; try { await scrapeProfile(prog); openWins(); } catch (e) { rf.disabled = false; prog.textContent = String(e).includes('noauth') ? 'Sign in to Vest, wait a moment, then try again' : 'No answer, try again'; } };
+    if (!pr) setTimeout(() => rf.click(), 300);
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !document.getElementById('gp-card')) closeWins(); });
   // ---------- GP. share cards: payout certificate + position share, flat theme ----------
   const CARD_L = {
     land: { W: 2400, H: 1600, pad: 150, wmY: 210, wm: 76, bigY: 770, big: 330, maxW: 1500, nameY: 945, name: 96, subY: 1045, sub: 58, stY: 1380, st: 64, slY: 1455, sl: 42, gap: 520, moon: [2520, 1900, 1420, 15], mark: [400, 170, 150], photo: [1050, 1] },
@@ -1003,7 +1059,7 @@ load().then(() => setTheme('mono'));
   function closeCard() { const h = document.getElementById('gp-card'); if (h) h.remove(); }
   function openCard(d) {
     closeCard(); fonts();
-    const HOST = document.createElement('div'); HOST.id = 'gp-card'; const R = HOST.attachShadow({ mode: 'open' });
+    const HOST = document.createElement('div'); HOST.id = 'gp-card'; HOST.style.cssText = 'position:fixed;inset:0;z-index:2147483647;pointer-events:auto'; shield(HOST); const R = HOST.attachShadow({ mode: 'open' });
     R.innerHTML = `<style>${CCSS}</style><div class="o"><div class="p">
       <div class="pv"><canvas></canvas></div>
       <div class="c">
@@ -1080,7 +1136,7 @@ load().then(() => setTheme('mono'));
   }
   const gpBtn = (label, onClick, like) => { const b = document.createElement('button'); b.type = 'button'; b.dataset.gpCard = '1'; b.textContent = label;
     b.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;height:' + (like ? Math.max(40, like.getBoundingClientRect().height) : 44) + 'px;border-radius:6px;border:1px solid rgba(241,241,243,.25);background:#0b0b0b;color:#f1f1f3;font:800 14px Manrope,system-ui,sans-serif;letter-spacing:-.01em;cursor:pointer';
-    b.onclick = e => { e.preventDefault(); e.stopPropagation(); onClick(); }; return b; };
+    b.onpointerdown = e => { e.preventDefault(); e.stopPropagation(); onClick(); }; b.onclick = e => { e.preventDefault(); e.stopPropagation(); }; return b; };
   // remember the row behind any click (payout row, position row, share icon)
   document.addEventListener('click', e => {
     if (e.target.closest && e.target.closest('#gp-card,#gp-float,#gp-dock,#gp-dash,#gp-prof,#gp-gate,[data-gp-card]')) return;
@@ -1090,13 +1146,16 @@ load().then(() => setTheme('mono'));
     if (hit && !txt && /\$[\d,]+/.test(lastRow.text) && findText(/positions history|open price|close price/i)) { let d = null; try { d = readTrade(row); } catch (er) {} if (!d) d = roughTrade(lastRow.text); if (d) lastShare = { at: Date.now(), d, done: false }; }
   }, true);
   let floatFor = null;
+  const shield = el => ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click', 'touchstart', 'focusin', 'focusout'].forEach(t => el.addEventListener(t, e => e.stopPropagation()));
+  const escVest = () => { ['keydown', 'keyup'].forEach(t => { const ev = { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true }; (document.activeElement || document.body).dispatchEvent(new KeyboardEvent(t, ev)); }); };
+  const handOff = make => { let d = null; try { d = make(); } catch (e) {} if (!d) return; escVest(); floatBtn(false); setTimeout(() => openCard(d), 180); };
   function floatBtn(show, onClick) {
     let h = document.getElementById('gp-float');
     if (!show) { if (h) h.remove(); floatFor = null; return; }
-    if (!h) { h = document.createElement('div'); h.id = 'gp-float'; h.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:2147483646';
+    if (!h) { h = document.createElement('div'); h.id = 'gp-float'; h.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:2147483647;pointer-events:auto'; shield(h);
       const r = h.attachShadow({ mode: 'open' }); r.innerHTML = '<style>button{display:flex;align-items:center;gap:10px;height:48px;padding:0 22px;border-radius:99px;border:1px solid rgba(241,241,243,.22);background:#0b0b0b;color:#f1f1f3;font:800 15px Manrope,system-ui,sans-serif;letter-spacing:-.01em;cursor:pointer;box-shadow:0 18px 40px -12px rgba(0,0,0,.9)}button:hover{border-color:rgba(241,241,243,.5)}b{font-weight:800}i{font-style:normal;color:#9e9ea5;font-weight:600}</style><button><b>GP.</b> card <i>flat theme</i></button>';
       document.body.appendChild(h); }
-    h.shadowRoot.querySelector('button').onclick = e => { e.stopPropagation(); onClick(); };
+    const bt = h.shadowRoot.querySelector('button'); bt.onpointerdown = e => { e.preventDefault(); e.stopPropagation(); onClick(); }; bt.onclick = e => { e.preventDefault(); e.stopPropagation(); };
   }
   setInterval(() => {
     if (!document.body) return;
@@ -1105,7 +1164,7 @@ load().then(() => setTheme('mono'));
     const h = findText(/customize your payout card|official payout certificate/i);
     if (h) {
       let box = h; while (box.parentElement && box.getBoundingClientRect().height < 320) box = box.parentElement;
-      const go = () => openCard(readPayout(box));
+      const go = () => handOff(() => readPayout(box));
       const claim = findText(/^\s*claim your card\s*$/i, box) || findText(/^\s*claim your card\s*$/i); const anchor = claim && (claim.closest('button') || claim);
       if (anchor && !anchor.parentElement.querySelector('[data-gp-card]')) { try { anchor.insertAdjacentElement('afterend', gpBtn('GP. card', go, anchor)); } catch (e) {} }
       floatFor = 'pay'; return floatBtn(true, go);
@@ -1114,8 +1173,8 @@ load().then(() => setTheme('mono'));
     if (lastShare && Date.now() - lastShare.at < 12000) {
       const d = lastShare.d;
       const dlg = [...document.querySelectorAll('[role=dialog],[aria-modal=true]')].filter(x => x.getClientRects().length).pop();
-      if (dlg && !dlg.querySelector('[data-gp-card]')) { const bs = [...dlg.querySelectorAll('button')].filter(b => b.getClientRects().length && (b.innerText || '').trim()); const last = bs[bs.length - 1]; try { (last ? last.parentElement : dlg).appendChild(gpBtn('GP. card', () => openCard(d), last)); } catch (e) {} }
-      floatFor = 'trade'; return floatBtn(true, () => { lastShare = null; openCard(d); });
+      if (dlg && !dlg.querySelector('[data-gp-card]')) { const bs = [...dlg.querySelectorAll('button')].filter(b => b.getClientRects().length && (b.innerText || '').trim()); const last = bs[bs.length - 1]; try { (last ? last.parentElement : dlg).appendChild(gpBtn('GP. card', () => handOff(() => d), last)); } catch (e) {} }
+      floatFor = 'trade'; return floatBtn(true, () => { lastShare = null; handOff(() => d); });
     }
     if (floatFor) floatBtn(false);
   }, 400);
